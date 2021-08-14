@@ -1,0 +1,6 @@
+dateparser==1.0.0
+https://github.com/PADAS/smart-integrate-sdk/releases/download/v0.8.1/cdip_connector-0.8.1-py3-none-any.whl
+pydantic==1.8.2
+python-json-logger==2.0.2
+redis==3.5.3
+untangle==1.1.1
