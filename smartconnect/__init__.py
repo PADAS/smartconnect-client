@@ -13,7 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Manually bump this.
-__version__ = '0.1.1'
+__version__ = '1.0.0'
 
 class SmartClient:
 
