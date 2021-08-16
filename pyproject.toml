@@ -1,11 +1,11 @@
 [tool.poetry]
 name = "smartconnect-client"
-version = "0.1.0"
+version = "0.1.1"
 description = ""
 authors = ["Chris Doehring <***REMOVED***oehring@gmail.com>"]
 
 packages = [
-    {include = "smartconnect_client" },
+    {include = "smartconnect" },
 ]
 
 [tool.poetry.dependencies]
