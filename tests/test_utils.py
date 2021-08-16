@@ -13,7 +13,7 @@ CA_LABEL = 'Sintegrate CA [sintegra]'
 
 
 def test_get_conservation_area():
-    smart_client = SmartClient(api='https://connect7.refractions.net:8443/server', username='sintegrate', password='***REMOVED***', use_language_code='en')
+    smart_client = SmartClient(api='https://connect7.refractions.net:8443/server', username='xxxxx', password='xxxxx', use_language_code='en')
 
     caslist = smart_client.get_conservation_areas()
 
