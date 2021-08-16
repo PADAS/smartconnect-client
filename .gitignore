@@ -1,4 +1,7 @@
+.DS_Store
 dist
 venv
 .python-version
 .vscode
+
+**/__pycache__

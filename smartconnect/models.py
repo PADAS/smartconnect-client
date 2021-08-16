@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, timezone
 import pytz
 from pydantic import BaseModel, Field
-from typing import List,Dict, Any
+from typing import List,Dict, Any, Optional
 from enum import Enum
+import uuid
 
 class TransformationRule(BaseModel):
 
@@ -45,3 +46,18 @@ class IndependentIncident(BaseModel):
     properties: IncidentProperties
 
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
+
+class ConservationArea(BaseModel):
+    label: str
+    status: str
+    version: uuid.UUID
+    revision: int
+    description: str
+    designation: str
+    organization: str
+    pointOfContact: str
+    location: str
+    owner: str
+    caBoundaryJson: str = Field(None, description='A string containing GeoJSON')
+    administrativeAreasJson: Optional[Any]
+    uuid: uuid.UUID

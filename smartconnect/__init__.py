@@ -5,12 +5,15 @@ import pytz
 import json
 import untangle
 import uuid
-import local_logging, models, cache
+from smartconnect import models, cache
+from typing import List
 
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Manually bump this.
+__version__ = '0.1.1'
 
 class SmartClient:
 
@@ -27,7 +30,7 @@ class SmartClient:
 
         self.logger = logging.getLogger(SmartClient.__name__)
             
-    def get_conservation_areas(self):
+    def get_conservation_areas(self) -> List[models.ConservationArea]:
         cas = requests.get(f'{self.api}/api/conservationarea',
             auth=self.auth,
             headers={
@@ -38,7 +41,8 @@ class SmartClient:
         if cas.ok:
             cas = cas.json()
 
-        return cas
+        return [models.ConservationArea.parse_obj(ca) for ca in cas]
+
 
     def download_datamodel(self, *, ca_uuid: str = None):
 
@@ -315,6 +319,16 @@ class DataModel:
                 'attributes': self._attributes,
             }, fo, indent=2)
 
+
+    def get_category(self, *, path: str = None) -> dict:
+        for cat in self._categories:
+            if cat['path'] == path:
+                return cat
+
+    def get_attribute(self, *, key:str = None) -> dict:
+        for att in self._attributes:
+            if att['key'] == key:
+                return att
 
     def generate_category_attributes(self, root):
         if hasattr(root, 'attribute'):
