@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "smartconnect-client"
-version = "1.0.0"
+version = "1.0.1"
 description = ""
 authors = ["Chris Doehring <***REMOVED***oehring@gmail.com>"]
 
@@ -10,14 +10,14 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.7"
-requests = "2.26.0"
+requests = "^2.25.1"
 pydantic = "^1.8.2"
 pytz = "^2021.1"
-python-json-logger = "2.0.2"
-redis = "3.5.3"
-untangle = "1.1.1"
-dateparser = "1.0.0"
-timezonefinder = "5.2.0"
+python-json-logger = "^2.0.2"
+redis = "^3.5.3"
+untangle = "^1.1.1"
+dateparser = "^1.0.0"
+timezonefinder = "^5.2.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

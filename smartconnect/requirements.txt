@@ -22,10 +22,6 @@ dateparser==1.0.0
     # via -r requirements.in
 environs==9.3.3
     # via cdip-connector
-geographiclib==1.52
-    # via geopy
-geopy==2.2.0
-    # via -r requirements.in
 idna==3.2
     # via
     #   requests
