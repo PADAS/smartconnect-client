@@ -1,10 +1,8 @@
 dateparser==1.0.0
-geopy==2.2.0
 https://github.com/PADAS/smart-integrate-sdk/releases/download/v0.9.2/cdip_connector-0.9.2-py3-none-any.whl
 pydantic==1.8.2
 python-json-logger==2.0.2
 pytz==2021.1
-redis==3.5.3
 redis==3.5.3
 timezonefinder==5.2.0
 untangle==1.1.1
