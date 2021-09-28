@@ -319,6 +319,15 @@ class DataModel:
                 'attributes': self._attributes,
             }, fo, indent=2)
 
+    def export_as_dict(self):
+        return {
+                'categories': self._categories,
+                'attributes': self._attributes,
+            }
+
+    def import_from_dict(self, data:dict):
+        self._categories = data.get('categories')
+        self._attributes = data.get('attributes')
 
     def get_category(self, *, path: str = None) -> dict:
         for cat in self._categories:
