@@ -32,17 +32,17 @@ class SmartClient:
             
     def get_conservation_areas(self) -> List[models.ConservationArea]:
         cas = requests.get(f'{self.api}/api/conservationarea',
-            auth=self.auth,
-            headers={
-                'accept': 'application/json',
-            },
-            )
+                            auth=self.auth,
+                            headers={
+                                'accept': 'application/json',
+                            },
+                            verify=False,
+                            )
         
         if cas.ok:
             cas = cas.json()
 
         return [models.ConservationArea.parse_obj(ca) for ca in cas]
-
 
     def download_datamodel(self, *, ca_uuid: str = None):
 
@@ -51,7 +51,8 @@ class SmartClient:
             headers={
                 'accept': 'application/xml',
             },
-            stream=True)
+            stream=True,
+            verify=False)
         ca_datamodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Datamodel. Status code is: %s', ca_datamodel.status_code)
@@ -64,7 +65,47 @@ class SmartClient:
         dm = DataModel()
         dm.load(ca_datamodel.text)
         return dm
-            
+
+    def generate_earth_ranger_event_type_schemas(self, dm: dict):
+        cats = dm.get('categories')
+        attributes = dm.get('attributes')
+        er_event_type_schemas = []
+
+        for cat in cats:
+            path = cat.get('path')
+            cat_attributes: list = cat.get('attributes')
+            path_components = str.split(path, sep='.')
+            parent_cat_paths = []
+            parent_cat_path = ''
+            for component in path_components[:-1]:  # skip last path component as that is current leaf
+                if parent_cat_path == '':
+                    parent_cat_path = component
+                else:
+                    parent_cat_path = f'{parent_cat_path}.{component}'
+                parent_cat_paths.append(parent_cat_path)
+                parent_cat = next((x for x in cats if x.get('path') == parent_cat_path), None)
+                if parent_cat:
+                    parent_attributes: list = parent_cat.get('attributes')
+                    cat_attributes.extend(parent_attributes)
+
+            schema = dict(title=path,
+                          type='object',
+                          properties={})
+            for cat_attribute in cat_attributes:
+                # TODO: consider isactive here
+                key = cat_attribute.get('key')
+                attribute = next((x for x in attributes if x.get('key') == key), None)
+                if attribute:
+                    type = attribute.get('type')
+                    display = attribute.get('display')
+                    # TODO: type mapping
+                    schema['properties'][key]= dict(type=type,
+                                                                  title=display)
+                else:
+                    print('Failed to find attribute')
+            er_event_type_schemas.append(schema)
+
+
     def download_patrolmodel(self, *, ca_uuid: str = None):
 
         ca_patrolmodel = requests.get(f'{self.api}/api/metadata/patrol/{ca_uuid}',
@@ -72,7 +113,8 @@ class SmartClient:
             headers={
                 'accept': 'application/json',
             },
-            stream=True)
+            stream=True,
+            verify=False)
         ca_patrolmodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Patrol Model. Status code is: %s', ca_patrolmodel.status_code)
@@ -93,7 +135,8 @@ class SmartClient:
             headers={
                 'accept': 'application/json',
             },
-            stream=True)
+            stream=True,
+            verify=False)
         ca_missionmodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Mission Model. Status code is: %s', ca_missionmodel.status_code)
