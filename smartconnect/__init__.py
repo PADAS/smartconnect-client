@@ -5,6 +5,7 @@ import pytz
 import json
 import untangle
 import uuid
+import json
 from smartconnect import models, cache
 from typing import List
 
@@ -18,7 +19,13 @@ __version__ = '1.0.0'
 class SmartClient:
 
     # TODO: Figure out how to specify timezone.
-    SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S' 
+    SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
+
+    smart_er_type_mapping = {'TEXT': 'string',
+                             'NUMERIC': 'number',
+                             'BOOLEAN': 'boolean',
+                             'TREE': 'array',
+                             'LIST': 'array'}
 
 
     def __init__(self, *, api=None, username=None, password=None, use_language_code='en'):
@@ -71,7 +78,7 @@ class SmartClient:
         attributes = dm.get('attributes')
         er_event_type_schemas = []
 
-        for cat in cats:
+        for cat in cats[0:2]:
             path = cat.get('path')
             cat_attributes: list = cat.get('attributes')
             path_components = str.split(path, sep='.')
@@ -91,19 +98,36 @@ class SmartClient:
             schema = dict(title=path,
                           type='object',
                           properties={})
+            schema['$schema'] = 'http://json-schema.org/draft-04/schema#'
+            schema_definition = []
             for cat_attribute in cat_attributes:
                 # TODO: consider isactive here
                 key = cat_attribute.get('key')
                 attribute = next((x for x in attributes if x.get('key') == key), None)
                 if attribute:
+                    schema_definition.append(key)
                     type = attribute.get('type')
+                    converted_type = self.smart_er_type_mapping[type]
                     display = attribute.get('display')
-                    # TODO: type mapping
-                    schema['properties'][key]= dict(type=type,
-                                                                  title=display)
+                    schema['properties'][key] = dict(type=converted_type,
+                                                     title=display)
+                    options = attribute.get('options')
+                    if options:
+                        option_values = [x.get('display') for x in options]
+                        schema['properties'][key]['items'] = dict(type='string',
+                                                                  enum=option_values)
+
                 else:
                     print('Failed to find attribute')
-            er_event_type_schemas.append(schema)
+            er_event_type_schema = dict(schema=schema,
+                                        definition=schema_definition)
+            er_event_type_schemas.append(er_event_type_schema)
+        for schema in er_event_type_schemas:
+            schema["schema"] = self.stringify(json.dumps(schema["schema"]))
+        return er_event_type_schemas
+
+    def stringify(self, string: str):
+        return string.replace('"', '\"')
 
 
     def download_patrolmodel(self, *, ca_uuid: str = None):
