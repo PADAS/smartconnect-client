@@ -73,10 +73,10 @@ class SmartClient:
         dm.load(ca_datamodel.text)
         return dm
 
-    def generate_earth_ranger_event_type_schemas(self, dm: dict):
+    def generate_earth_ranger_event_types(self, dm: dict):
         cats = dm.get('categories')
         attributes = dm.get('attributes')
-        er_event_type_schemas = []
+        er_event_types = []
 
         for cat in cats[0:2]:
             path = cat.get('path')
@@ -119,15 +119,12 @@ class SmartClient:
 
                 else:
                     print('Failed to find attribute')
-            er_event_type_schema = dict(schema=schema,
-                                        definition=schema_definition)
-            er_event_type_schemas.append(er_event_type_schema)
-        for schema in er_event_type_schemas:
-            schema["schema"] = self.stringify(json.dumps(schema["schema"]))
-        return er_event_type_schemas
-
-    def stringify(self, string: str):
-        return string.replace('"', '\"')
+            schema['definition'] = schema_definition
+            er_event_type_schema = dict(schema=schema)
+            er_event_type_schema = json.dumps(er_event_type_schema)
+            er_event_type = dict(schema=er_event_type_schema)
+            er_event_types.append(er_event_type)
+        return er_event_types
 
 
     def download_patrolmodel(self, *, ca_uuid: str = None):
