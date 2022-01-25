@@ -21,13 +21,6 @@ class SmartClient:
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
-    smart_er_type_mapping = {'TEXT': 'string',
-                             'NUMERIC': 'number',
-                             'BOOLEAN': 'boolean',
-                             'TREE': 'array',
-                             'LIST': 'array'}
-
-
     def __init__(self, *, api=None, username=None, password=None, use_language_code='en'):
         self.api = api
         self.username = username
@@ -72,59 +65,6 @@ class SmartClient:
         dm = DataModel()
         dm.load(ca_datamodel.text)
         return dm
-
-    def generate_earth_ranger_event_types(self, dm: dict):
-        cats = dm.get('categories')
-        attributes = dm.get('attributes')
-        er_event_types = []
-
-        for cat in cats[0:2]:
-            path = cat.get('path')
-            cat_attributes: list = cat.get('attributes')
-            path_components = str.split(path, sep='.')
-            parent_cat_paths = []
-            parent_cat_path = ''
-            for component in path_components[:-1]:  # skip last path component as that is current leaf
-                if parent_cat_path == '':
-                    parent_cat_path = component
-                else:
-                    parent_cat_path = f'{parent_cat_path}.{component}'
-                parent_cat_paths.append(parent_cat_path)
-                parent_cat = next((x for x in cats if x.get('path') == parent_cat_path), None)
-                if parent_cat:
-                    parent_attributes: list = parent_cat.get('attributes')
-                    cat_attributes.extend(parent_attributes)
-
-            schema = dict(title=path,
-                          type='object',
-                          properties={})
-            schema['$schema'] = 'http://json-schema.org/draft-04/schema#'
-            schema_definition = []
-            for cat_attribute in cat_attributes:
-                # TODO: consider isactive here
-                key = cat_attribute.get('key')
-                attribute = next((x for x in attributes if x.get('key') == key), None)
-                if attribute:
-                    schema_definition.append(key)
-                    type = attribute.get('type')
-                    converted_type = self.smart_er_type_mapping[type]
-                    display = attribute.get('display')
-                    schema['properties'][key] = dict(type=converted_type,
-                                                     title=display)
-                    options = attribute.get('options')
-                    if options:
-                        option_values = [x.get('display') for x in options]
-                        schema['properties'][key]['items'] = dict(type='string',
-                                                                  enum=option_values)
-
-                else:
-                    print('Failed to find attribute')
-            schema['definition'] = schema_definition
-            er_event_type_schema = dict(schema=schema)
-            er_event_type_schema = json.dumps(er_event_type_schema)
-            er_event_type = dict(schema=er_event_type_schema)
-            er_event_types.append(er_event_type)
-        return er_event_types
 
 
     def download_patrolmodel(self, *, ca_uuid: str = None):
