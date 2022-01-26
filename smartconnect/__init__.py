@@ -2,7 +2,6 @@ import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 import pytz
-import json
 import untangle
 import uuid
 import json
@@ -36,7 +35,6 @@ class SmartClient:
                             headers={
                                 'accept': 'application/json',
                             },
-                            verify=False,
                             )
         
         if cas.ok:
@@ -51,8 +49,7 @@ class SmartClient:
             headers={
                 'accept': 'application/xml',
             },
-            stream=True,
-            verify=False)
+            stream=True)
         ca_datamodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Datamodel. Status code is: %s', ca_datamodel.status_code)
@@ -74,8 +71,7 @@ class SmartClient:
             headers={
                 'accept': 'application/json',
             },
-            stream=True,
-            verify=False)
+            stream=True)
         ca_patrolmodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Patrol Model. Status code is: %s', ca_patrolmodel.status_code)
@@ -96,8 +92,7 @@ class SmartClient:
             headers={
                 'accept': 'application/json',
             },
-            stream=True,
-            verify=False)
+            stream=True)
         ca_missionmodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Mission Model. Status code is: %s', ca_missionmodel.status_code)
