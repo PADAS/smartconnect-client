@@ -23,6 +23,9 @@ def build_earth_ranger_event_types(dm: dict):
                              display=display)
         inherited_attributes = get_inherited_attributes(cats, path_components)
         leaf_attributes.extend(inherited_attributes)
+        if not leaf_attributes:
+            # Dont create event_types for leaves with no attributes
+            continue
 
         schema = build_schema_and_form_definition(attributes, leaf_attributes)
 
@@ -73,4 +76,9 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
             print('Failed to find attribute')
     schema['definition'] = schema_definition
     return schema
+
+
+def er_event_type_schemas_equal(schema1: dict, schema2: dict):
+    return schema1.get('properties') == schema2.get('properties')
+
 
