@@ -59,9 +59,11 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
     for attribute_meta in leaf_attributes:
         # TODO: consider isactive here
         key = attribute_meta.get('key')
+        isactive = attribute_meta.get('isactive')
         attribute = next((x for x in attributes if x.get('key') == key), None)
         if attribute:
-            schema_definition.append(key)
+            if isactive: # for now we will hide inactive attributes in er events schema definition
+                schema_definition.append(key)
             type = attribute.get('type')
             converted_type = smart_er_type_mapping[type]
             display = attribute.get('display')
@@ -79,6 +81,6 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
 
 
 def er_event_type_schemas_equal(schema1: dict, schema2: dict):
-    return schema1.get('properties') == schema2.get('properties')
+    return schema1.get('properties') == schema2.get('properties') and schema1.get('definition') == schema2.get('definition')
 
 
