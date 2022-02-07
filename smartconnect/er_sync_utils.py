@@ -57,7 +57,6 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
     schema['$schema'] = 'http://json-schema.org/draft-04/schema#'
     schema_definition = []
     for attribute_meta in leaf_attributes:
-        # TODO: consider isactive here
         key = attribute_meta.get('key')
         isactive = attribute_meta.get('isactive')
         attribute = next((x for x in attributes if x.get('key') == key), None)
@@ -71,9 +70,9 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
                                              title=display)
             options = attribute.get('options')
             if options:
-                option_values = [x.get('display') for x in options]
+                option_values = [dict(title=x.get('display'), const=x.get('key')) for x in options]
                 schema['properties'][key]['items'] = dict(type='string',
-                                                          enum=option_values)
+                                                          oneOf=option_values)
         else:
             print('Failed to find attribute')
     schema['definition'] = schema_definition
