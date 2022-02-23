@@ -2,10 +2,10 @@ import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 import pytz
-import json
 import untangle
 import uuid
-from smartconnect import models, cache
+import json
+from smartconnect import models, cache, smart_settings
 from typing import List
 
 import logging
@@ -18,8 +18,7 @@ __version__ = '1.0.0'
 class SmartClient:
 
     # TODO: Figure out how to specify timezone.
-    SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S' 
-
+    SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
     def __init__(self, *, api=None, username=None, password=None, use_language_code='en'):
         self.api = api
@@ -29,20 +28,21 @@ class SmartClient:
         self.use_language_code=use_language_code
 
         self.logger = logging.getLogger(SmartClient.__name__)
+        self.verify_ssl = smart_settings.SMART_SSL_VERIFY
             
     def get_conservation_areas(self) -> List[models.ConservationArea]:
         cas = requests.get(f'{self.api}/api/conservationarea',
-            auth=self.auth,
-            headers={
-                'accept': 'application/json',
-            },
-            )
+                            auth=self.auth,
+                            headers={
+                                'accept': 'application/json',
+                            },
+                            verify=self.verify_ssl
+                            )
         
         if cas.ok:
             cas = cas.json()
 
         return [models.ConservationArea.parse_obj(ca) for ca in cas]
-
 
     def download_datamodel(self, *, ca_uuid: str = None):
 
@@ -51,7 +51,8 @@ class SmartClient:
             headers={
                 'accept': 'application/xml',
             },
-            stream=True)
+            stream=True,
+            verify=self.verify_ssl)
         ca_datamodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Datamodel. Status code is: %s', ca_datamodel.status_code)
@@ -64,7 +65,8 @@ class SmartClient:
         dm = DataModel()
         dm.load(ca_datamodel.text)
         return dm
-            
+
+
     def download_patrolmodel(self, *, ca_uuid: str = None):
 
         ca_patrolmodel = requests.get(f'{self.api}/api/metadata/patrol/{ca_uuid}',
@@ -72,7 +74,8 @@ class SmartClient:
             headers={
                 'accept': 'application/json',
             },
-            stream=True)
+            stream=True,
+            verify=self.verify_ssl)
         ca_patrolmodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Patrol Model. Status code is: %s', ca_patrolmodel.status_code)
@@ -93,7 +96,8 @@ class SmartClient:
             headers={
                 'accept': 'application/json',
             },
-            stream=True)
+            stream=True,
+            verify=self.verify_ssl)
         ca_missionmodel.raw.decode_content = True    
 
         self.logger.info('Downloaded CA Mission Model. Status code is: %s', ca_missionmodel.status_code)
@@ -110,7 +114,7 @@ class SmartClient:
     def add_independent_incident(self, *, incident: models.IndependentIncident, ca_uuid: str = None):
         
         response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'}, 
-            data=incident.json(), auth=self.auth, timeout=(3.1, 10))
+            data=incident.json(), auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
 
         if response.ok:
             print('All good mate!')
@@ -202,8 +206,10 @@ class SmartClient:
 
 
 
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}', json=track_point, 
-        auth=self.auth)
+        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+                                 json=track_point,
+                                 auth=self.auth,
+                                 verify=self.verify_ssl)
 
         if response.ok:
             print('All good mate!')
@@ -282,7 +288,10 @@ class SmartClient:
             
             # TODO: if we decide we need to 'start' a patrol, can we forego the track-point?
             '''
-            response = requests.post(f'{self.api}/api/data/{ca_uuid}', json=track_point, auth=self.auth)
+            response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+                                     json=track_point,
+                                     auth=self.auth,
+                                     verify=self.verify_ssl)
 
             if response.ok:
                 logger.info('Posted track point for Patrol Label: %s. Context is %s', patrol_label, response.text)
@@ -292,7 +301,10 @@ class SmartClient:
                 data = response.json()
                 
                 if patrol_ids['patrol_leg_uuid'] in data.get('error', ''):
-                    patrol_start_response = requests.post(f'{self.api}/api/data/{ca_uuid}', json=patrol_start, auth=self.auth)
+                    patrol_start_response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+                                                          json=patrol_start,
+                                                          auth=self.auth,
+                                                          verify=self.verify_ssl)
 
                     if patrol_start_response.ok:
                         logger.info('Started Patrol for label: %s', patrol_label)
