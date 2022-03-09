@@ -1,4 +1,5 @@
 import requests
+from pydantic.main import BaseModel
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
 import pytz
@@ -6,7 +7,7 @@ import untangle
 import uuid
 import json
 from smartconnect import models, cache, smart_settings
-from typing import List
+from typing import List, Optional
 
 import logging
 
@@ -84,9 +85,10 @@ class SmartClient:
             self.logger.error('Failed to download CA Patrol Model. Status_code is: %s', ca_patrolmodel.status_code)
             raise Exception('Failed to download Patrol Model.')
 
+        dm = PatrolDataModel.parse_obj(json.loads(ca_patrolmodel.text))
 
-        with open('_patrolmodel.json', 'w') as fo:
-            fo.write(ca_patrolmodel.text)
+        # with open('_patrolmodel.json', 'w') as fo:
+        #     fo.write(ca_patrolmodel.text)
 
 
     def download_missionmodel(self, *, ca_uuid: str = None):
@@ -442,4 +444,29 @@ class DataModel:
                 return item['value']
         else:
             return 'n/a'
+
+
+class Names(BaseModel):
+    name: str
+    locale: Optional[str]
+
+
+class ListOptions(BaseModel):
+    id: str
+    names: List[Names]
+
+
+class PatrolMetaData(BaseModel):
+    id: str
+    names: List[Names]
+    requiredWhen: Optional[str] = 'False'
+    listOptions: Optional[List[ListOptions]] = None
+    type: str
+
+
+class PatrolDataModel(BaseModel):
+    patrolMetadata: List[PatrolMetaData]
+
+
+
 
