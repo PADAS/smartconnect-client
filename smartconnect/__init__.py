@@ -85,11 +85,8 @@ class SmartClient:
             self.logger.error('Failed to download CA Patrol Model. Status_code is: %s', ca_patrolmodel.status_code)
             raise Exception('Failed to download Patrol Model.')
 
-        dm = PatrolDataModel.parse_obj(json.loads(ca_patrolmodel.text))
-
-        # with open('_patrolmodel.json', 'w') as fo:
-        #     fo.write(ca_patrolmodel.text)
-
+        pm = PatrolDataModel.parse_obj(json.loads(ca_patrolmodel.text))
+        return pm
 
     def download_missionmodel(self, *, ca_uuid: str = None):
 
