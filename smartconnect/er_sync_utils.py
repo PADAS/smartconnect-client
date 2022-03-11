@@ -1,10 +1,26 @@
 import json
+from typing import Optional
+
+from smartconnect import PatrolDataModel
+from pydantic.main import BaseModel
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 smart_er_type_mapping = {'TEXT': 'string',
                          'NUMERIC': 'number',
                          'BOOLEAN': 'boolean',
                          'TREE': 'array',
                          'LIST': 'array'}
+
+
+class Subject(BaseModel):
+    id: Optional[str]
+    name: str
+    subject_subtype: str
+    additional: dict
+    is_active: bool
 
 
 def build_earth_ranger_event_types(dm: dict):
@@ -81,5 +97,26 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
 
 def er_event_type_schemas_equal(schema1: dict, schema2: dict):
     return schema1.get('properties') == schema2.get('properties') and schema1.get('definition') == schema2.get('definition')
+
+
+def er_subjects_equal(subject1: Subject, subject2: Subject):
+    return subject1.name == subject2.name
+
+
+def get_subjects_from_patrol_data_model(pm: PatrolDataModel):
+    # create subjects from members
+    members = next((metaData for metaData in pm.patrolMetadata if metaData.id == "members"), None)
+    subjects = []
+    if members:
+        for member in members.listOptions:
+            if member.names:
+                subject = Subject(name=member.names[0].name,
+                                  subject_subtype='ranger',
+                                  additional=dict(smart_member_id=member.id),
+                                  is_active=True)
+                subjects.append(subject)
+    return subjects
+
+
 
 
