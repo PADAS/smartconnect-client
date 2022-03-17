@@ -33,7 +33,7 @@ class PatrolSmartAttributes(BaseModel):
     objective: Optional[str]
     comment: Optional[str]
     isArmed: Optional[str]
-    transporType: Optional[str]
+    transportType: Optional[str]
     mandate: Optional[str]
     number: Optional[int]
     members: Optional[List[str]]
