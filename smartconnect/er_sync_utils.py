@@ -1,7 +1,7 @@
 import json
 from typing import Optional
 
-from smartconnect import PatrolDataModel
+from smartconnect import PatrolDataModel, Subject
 from pydantic.main import BaseModel
 
 import logging
@@ -13,14 +13,6 @@ smart_er_type_mapping = {'TEXT': 'string',
                          'BOOLEAN': 'boolean',
                          'TREE': 'array',
                          'LIST': 'array'}
-
-
-class Subject(BaseModel):
-    id: Optional[str]
-    name: str
-    subject_subtype: str
-    additional: dict
-    is_active: bool
 
 
 def build_earth_ranger_event_types(dm: dict):

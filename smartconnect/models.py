@@ -20,15 +20,31 @@ class SmartObservationGroup(BaseModel):
     observations: List[SmartObservation]
 
 
-class SmartAttributes(BaseModel):
-    observationGroups: List[SmartObservationGroup]
+class IncidentSmartAttributes(BaseModel):
+    observationGroups: Optional[List[SmartObservationGroup]]
+    comment: Optional[str]
+
+
+
+class PatrolSmartAttributes(BaseModel):
+    patrolUuid: Optional[str]
+    patrolLegUuid: Optional[str]
+    team: Optional[str]
+    objective: Optional[str]
+    comment: Optional[str]
+    isArmed: Optional[str]
+    transporType: Optional[str]
+    mandate: Optional[str]
+    number: Optional[int]
+    members: Optional[List[str]]
+    leader: Optional[str]
 
 
 class IncidentProperties(BaseModel):
     dateTime: datetime
     smartDataType: str = 'incident'
     smartFeatureType: str = 'observation'
-    smartAttributes: SmartAttributes
+    smartAttributes: IncidentSmartAttributes
 
     class Config:
         json_encoders = {
@@ -44,6 +60,22 @@ class IndependentIncident(BaseModel):
     type: str = 'Feature'
     geometry: Geometry
     properties: IncidentProperties
+
+class PatrolProperties(BaseModel):
+    dateTime: datetime
+    smartDataType: str = 'patrol'
+    smartFeatureType: str = 'patrol'
+    smartAttributes: PatrolSmartAttributes
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.strftime(SMARTCONNECT_DATFORMAT)
+        }
+
+class Patrol(BaseModel):
+    type: str = 'Feature'
+    geometry: Geometry
+    properties: PatrolProperties
 
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
