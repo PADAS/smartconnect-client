@@ -30,7 +30,7 @@ class SmartClient:
 
         self.logger = logging.getLogger(SmartClient.__name__)
         self.verify_ssl = smart_settings.SMART_SSL_VERIFY
-            
+
     def get_conservation_areas(self) -> List[models.ConservationArea]:
         cas = requests.get(f'{self.api}/api/conservationarea',
                             auth=self.auth,
@@ -39,7 +39,7 @@ class SmartClient:
                             },
                             verify=self.verify_ssl
                             )
-        
+
         if cas.ok:
             cas = cas.json()
 
@@ -54,7 +54,7 @@ class SmartClient:
             },
             stream=True,
             verify=self.verify_ssl)
-        ca_datamodel.raw.decode_content = True    
+        ca_datamodel.raw.decode_content = True
 
         self.logger.info('Downloaded CA Datamodel. Status code is: %s', ca_datamodel.status_code)
 
@@ -77,7 +77,7 @@ class SmartClient:
             },
             stream=True,
             verify=self.verify_ssl)
-        ca_patrolmodel.raw.decode_content = True    
+        ca_patrolmodel.raw.decode_content = True
 
         self.logger.info('Downloaded CA Patrol Model. Status code is: %s', ca_patrolmodel.status_code)
 
@@ -97,7 +97,7 @@ class SmartClient:
             },
             stream=True,
             verify=self.verify_ssl)
-        ca_missionmodel.raw.decode_content = True    
+        ca_missionmodel.raw.decode_content = True
 
         self.logger.info('Downloaded CA Mission Model. Status code is: %s', ca_missionmodel.status_code)
 
@@ -111,8 +111,8 @@ class SmartClient:
 
 
     def add_independent_incident(self, *, incident: models.IndependentIncident, ca_uuid: str = None):
-        
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'}, 
+
+        response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
             data=incident.json(), auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
 
         if response.ok:
@@ -124,7 +124,7 @@ class SmartClient:
         logger.debug(response.status_code, response.content)
 
     # def add_incident(self, *, ca_uuid: str = None):
-        
+
     #     present = datetime.now(tz=pytz.utc)
 
 
@@ -150,10 +150,10 @@ class SmartClient:
     #                                     #'species': 'chordata_rl.reptilia_rl.squamata_rl.amphisbaenidae_rl.blanus_rl.blanuscinereus_rl61469',
     #                                     'species': 'chordata_rl.mammalia_rl.proboscidea_rl.elephantidae_rl.loxodonta_rl', #.loxodontaafricana_rl12392'
     #                                 },
-                                    
+
     #                             }
     #                         ]
-    #                     }                    
+    #                     }
     #                 ]
 
     #             }
@@ -172,7 +172,7 @@ class SmartClient:
         present = datetime.now(tz=pytz.utc)
 
         mission_uuid = str(uuid.uuid4())
-        
+
         print(f'Using Mission id: {mission_uuid}')
         track_point = {
             "type": "Feature",
@@ -182,14 +182,14 @@ class SmartClient:
             },
             "properties": {
             "dateTime": present.strftime(self.SMARTCONNECT_DATFORMAT),
-            
+
             "smartDataType": "mission",
             "smartFeatureType": "start",
             "smartAttributes": {
                 'missionId': 'wildilfe/2021/07/mission-00004',
                 "missionUuid": mission_uuid, # required
                 "survey": '3e6efdfdb3fe4929816ab1f735a80fad',
-                # "team": "communityteam1",     
+                # "team": "communityteam1",
                 "objective": "Tracking wildlife",   #required
                 "comment": "Tracking wildlife",     #required
                 "isArmed": "false",
@@ -220,12 +220,18 @@ class SmartClient:
             'patrol_uuid': str(uuid.uuid4()),
             'patrol_leg_uuid': str(uuid.uuid4())
         })
-        
+
     def generate_patrol_label(self, *, device_id=None, prefix='wildlife', ts=None):
 
         ts = ts or datetime.now(tz=pytz.utc)
 
         return '/'.join( (prefix, device_id, ts.strftime('%Y/%m')) )
+
+    def start_patrol(self, *, patrol: models.Patrol, ca_uuid: str = None):
+        response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
+                                 data=patrol.json(), auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
+        if response.ok:
+            logger.info("Patrol started successfully")
 
 
     def add_patrol_trackpoint(self, *, ca_uuid: str = None, device_id: str = None, x=None, y=None, timestamp=None):
@@ -243,7 +249,7 @@ class SmartClient:
             },
             "properties": {
             "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
-            
+
             "smartDataType": "patrol",
             "smartFeatureType": "start",
             "smartAttributes": {
@@ -269,7 +275,7 @@ class SmartClient:
             },
             "properties": {
                 "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
-                
+
                 "smartDataType": "patrol",
                 "smartFeatureType": "trackpoint",
                 "smartAttributes": {
@@ -296,9 +302,9 @@ class SmartClient:
                 logger.info('Posted track point for Patrol Label: %s. Context is %s', patrol_label, response.text)
                 break
             if response.status_code == 400: # < Likely there isn't a patrol started.
-                
+
                 data = response.json()
-                
+
                 if patrol_ids['patrol_leg_uuid'] in data.get('error', ''):
                     patrol_start_response = requests.post(f'{self.api}/api/data/{ca_uuid}',
                                                           json=patrol_start,
@@ -307,10 +313,10 @@ class SmartClient:
 
                     if patrol_start_response.ok:
                         logger.info('Started Patrol for label: %s', patrol_label)
-                    else:                        
+                    else:
                         logger.error('Failed to start a patrol for label: %s', patrol_label)
                         break
-                    
+
 
 class DataModel:
 
@@ -379,10 +385,10 @@ class DataModel:
     def generate_tree_children(self, branch, prefix=''):
         if hasattr(branch, 'children'):
             for elem in branch.children:
-                
-                if elem._name == 'children': 
+
+                if elem._name == 'children':
                     child = elem
-                
+
                     this_key = '.'.join([prefix, child['key']])
                     val = {
                         'key': this_key,
@@ -441,6 +447,14 @@ class DataModel:
                 return item['value']
         else:
             return 'n/a'
+
+
+class Subject(BaseModel):
+    id: Optional[str]
+    name: str
+    subject_subtype: str
+    additional: dict
+    is_active: bool
 
 
 class Names(BaseModel):
