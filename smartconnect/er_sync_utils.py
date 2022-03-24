@@ -96,7 +96,7 @@ def er_subjects_equal(subject1: Subject, subject2: Subject):
 
 
 def get_subjects_from_patrol_data_model(pm: PatrolDataModel):
-    # create subjects from members
+    # create ER subjects from Patrol Data Model members
     members = next((metaData for metaData in pm.patrolMetadata if metaData.id == "members"), None)
     subjects = []
     if members:
