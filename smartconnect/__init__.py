@@ -22,7 +22,7 @@ class SmartClient:
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
     def __init__(self, *, api=None, username=None, password=None, use_language_code='en'):
-        self.api = api
+        self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
         self.password = password
         self.auth=HTTPBasicAuth(self.username, self.password)
@@ -221,101 +221,169 @@ class SmartClient:
             'patrol_leg_uuid': str(uuid.uuid4())
         })
 
+    def get_patrol(self, *, patrol_id=None):
+        patrol = None
+        response = requests.get(f'{self.api}/api/query/custom/patrol',
+                                 auth=self.auth,
+                                 params= {"client_patrol_uuid": patrol_id},
+                                 verify=self.verify_ssl)
+        # TODO: patrols created without waypoints will respond 200 but no response body
+        if response.ok and len(response.json()) > 0:
+            patrol = models.PatrolResponse.parse_obj(response.json()[0])
+        return patrol
+
     def generate_patrol_label(self, *, device_id=None, prefix='wildlife', ts=None):
 
         ts = ts or datetime.now(tz=pytz.utc)
 
         return '/'.join( (prefix, device_id, ts.strftime('%Y/%m')) )
 
-    def start_patrol(self, *, patrol: models.Patrol, ca_uuid: str = None):
+    def post_smart_request(self, *, json: str, ca_uuid: str = None):
         response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
-                                 data=patrol.json(), auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
+                                 data=json, auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
         if response.ok:
-            logger.info("Patrol started successfully")
+            logger.info("posted request to SMART successfully")
 
-
-    def add_patrol_trackpoint(self, *, ca_uuid: str = None, device_id: str = None, x=None, y=None, timestamp=None):
-
-        # present = datetime.now(tz=pytz.utc) - timedelta(minutes=15)
-
-        patrol_label = self.generate_patrol_label(device_id=device_id, prefix='wildlife', ts=timestamp)
-        patrol_ids = cache.ensure_patrol(patrol_label)
-
-        patrol_start = {
-            "type": "Feature",
-            "geometry": {
-            "coordinates": [x, y],
-            "type": "Point"
-            },
-            "properties": {
-            "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
-
-            "smartDataType": "patrol",
-            "smartFeatureType": "start",
-            "smartAttributes": {
-                'patrolId': patrol_label,
-                "patrolUuid": patrol_ids['patrol_uuid'], # required #generated-by-client
-                "patrolLegUuid": patrol_ids['patrol_leg_uuid'],  # required #generated-by-client
-                "objective": "Tracking wildlife",   #required #free-text
-                "comment": "Tracking wildlife",     #required #free-text
-                "isArmed": "false",
-                "transportType": "wildlife",        #required #must-exist-in-smart
-                "mandate": "animaltracking",        #required
-                "members": ['9b07b0d7155d44de93e8361fede22297'], # Required #must-exist-in-smart
-                "leader": '9b07b0d7155d44de93e8361fede22297',  # required #must-exist-in-smart
-            }
-            }
-        }
-
+    def add_patrol_trackpoint(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
         track_point = {
             "type": "Feature",
             "geometry": {
-            "coordinates": [x, y],
-            "type": "Point"
+                "coordinates": [x, y],
+                "type": "Point"
             },
             "properties": {
                 "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
 
                 "smartDataType": "patrol",
-                "smartFeatureType": "trackpoint",
+                "smartFeatureType": "trackpoint/new",
                 "smartAttributes": {
-                    'patrolId': patrol_label,
-                    "patrolUuid": patrol_ids['patrol_uuid'], # required
-                    "patrolLegUuid": patrol_ids['patrol_leg_uuid'],  # required
+                    "patrolUuid": patrol_uuid,  # required
+                    "patrolLegUuid": patrol_leg_uuid,  # required
                 }
             }
         }
 
-        for _ in range(2):
-            '''
-            I'll try once, possibly failing on 'no patrol present'. If that happens we'll create
-            a patrol and-repost the track-point.
-            
-            # TODO: if we decide we need to 'start' a patrol, can we forego the track-point?
-            '''
-            response = requests.post(f'{self.api}/api/data/{ca_uuid}',
-                                     json=track_point,
-                                     auth=self.auth,
-                                     verify=self.verify_ssl)
+        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+                                 json=track_point,
+                                 auth=self.auth,
+                                 verify=self.verify_ssl)
 
-            if response.ok:
-                logger.info('Posted track point for Patrol Label: %s. Context is %s', patrol_label, response.text)
-                break
-            if response.status_code == 400: # < Likely there isn't a patrol started.
+        if response.ok:
+            print('All good mate!')
+        print(response.status_code, response.content)
 
-                data = response.json()
+    def add_patrol_waypoint(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None,
+                              x=None, y=None, timestamp=None):
+        way_point = {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [x, y],
+                "type": "Point"
+            },
+            "properties": {
+                "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
 
-                if patrol_ids['patrol_leg_uuid'] in data.get('error', ''):
-                    patrol_start_response = requests.post(f'{self.api}/api/data/{ca_uuid}',
-                                                          json=patrol_start,
-                                                          auth=self.auth,
-                                                          verify=self.verify_ssl)
+                "smartDataType": "patrol",
+                "smartFeatureType": "waypoint/new",
+                "smartAttributes": {
+                    "patrolUuid": patrol_uuid,  # required
+                    "patrolLegUuid": patrol_leg_uuid,  # required
+                }
+            }
+        }
 
-                    if patrol_start_response.ok:
-                        logger.info('Started Patrol for label: %s', patrol_label)
-                    else:
-                        logger.error('Failed to start a patrol for label: %s', patrol_label)
-                        break
+        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+                                 json=way_point,
+                                 auth=self.auth,
+                                 verify=self.verify_ssl)
+
+        if response.ok:
+            print('All good mate!')
+        print(response.status_code, response.content)
+
+
+    # def add_patrol_trackpoint(self, *, ca_uuid: str = None, device_id: str = None, x=None, y=None, timestamp=None):
+    #
+    #     # present = datetime.now(tz=pytz.utc) - timedelta(minutes=15)
+    #
+    #     patrol_label = self.generate_patrol_label(device_id=device_id, prefix='wildlife', ts=timestamp)
+    #     patrol_ids = cache.ensure_patrol(patrol_label)
+    #
+    #     patrol_start = {
+    #         "type": "Feature",
+    #         "geometry": {
+    #         "coordinates": [x, y],
+    #         "type": "Point"
+    #         },
+    #         "properties": {
+    #         "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
+    #
+    #         "smartDataType": "patrol",
+    #         "smartFeatureType": "start",
+    #         "smartAttributes": {
+    #             'patrolId': patrol_label,
+    #             "patrolUuid": patrol_ids['patrol_uuid'], # required #generated-by-client
+    #             "patrolLegUuid": patrol_ids['patrol_leg_uuid'],  # required #generated-by-client
+    #             "objective": "Tracking wildlife",   #required #free-text
+    #             "comment": "Tracking wildlife",     #required #free-text
+    #             "isArmed": "false",
+    #             "transportType": "wildlife",        #required #must-exist-in-smart
+    #             "mandate": "animaltracking",        #required
+    #             "members": ['9b07b0d7155d44de93e8361fede22297'], # Required #must-exist-in-smart
+    #             "leader": '9b07b0d7155d44de93e8361fede22297',  # required #must-exist-in-smart
+    #         }
+    #         }
+    #     }
+    #
+    #     track_point = {
+    #         "type": "Feature",
+    #         "geometry": {
+    #         "coordinates": [x, y],
+    #         "type": "Point"
+    #         },
+    #         "properties": {
+    #             "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
+    #
+    #             "smartDataType": "patrol",
+    #             "smartFeatureType": "trackpoint",
+    #             "smartAttributes": {
+    #                 'patrolId': patrol_label,
+    #                 "patrolUuid": patrol_ids['patrol_uuid'], # required
+    #                 "patrolLegUuid": patrol_ids['patrol_leg_uuid'],  # required
+    #             }
+    #         }
+    #     }
+    #
+    #     for _ in range(2):
+    #         '''
+    #         I'll try once, possibly failing on 'no patrol present'. If that happens we'll create
+    #         a patrol and-repost the track-point.
+    #
+    #         # TODO: if we decide we need to 'start' a patrol, can we forego the track-point?
+    #         '''
+    #         response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+    #                                  json=track_point,
+    #                                  auth=self.auth,
+    #                                  verify=self.verify_ssl)
+    #
+    #         if response.ok:
+    #             logger.info('Posted track point for Patrol Label: %s. Context is %s', patrol_label, response.text)
+    #             break
+    #         if response.status_code == 400: # < Likely there isn't a patrol started.
+    #
+    #             data = response.json()
+    #
+    #             if patrol_ids['patrol_leg_uuid'] in data.get('error', ''):
+    #                 patrol_start_response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+    #                                                       json=patrol_start,
+    #                                                       auth=self.auth,
+    #                                                       verify=self.verify_ssl)
+    #
+    #                 if patrol_start_response.ok:
+    #                     logger.info('Started Patrol for label: %s', patrol_label)
+    #                 else:
+    #                     logger.error('Failed to start a patrol for label: %s', patrol_label)
+    #                     break
 
 
 class DataModel:
