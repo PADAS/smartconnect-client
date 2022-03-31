@@ -1,7 +1,8 @@
 import json
 from typing import Optional
 
-from smartconnect import PatrolDataModel, Subject
+from smartconnect import PatrolDataModel
+from cdip_connector.core.schemas import ERSubject
 from pydantic.main import BaseModel
 
 import logging
@@ -17,6 +18,7 @@ smart_er_type_mapping = {'TEXT': 'string',
 
 def build_earth_ranger_event_types(dm: dict):
     """Builds Earth Ranger Event Types from SMART CA data model"""
+    # TODO: create pydantic models for flow below
     cats = dm.get('categories')
     attributes = dm.get('attributes')
     er_event_types = []
@@ -91,7 +93,7 @@ def er_event_type_schemas_equal(schema1: dict, schema2: dict):
     return schema1.get('properties') == schema2.get('properties') and schema1.get('definition') == schema2.get('definition')
 
 
-def er_subjects_equal(subject1: Subject, subject2: Subject):
+def er_subjects_equal(subject1: ERSubject, subject2: ERSubject):
     return subject1.name == subject2.name
 
 
