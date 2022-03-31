@@ -1,4 +1,5 @@
 import requests
+from pydantic import parse_obj_as
 from pydantic.main import BaseModel
 from requests.auth import HTTPBasicAuth
 from datetime import datetime, timedelta
@@ -10,6 +11,8 @@ from smartconnect import models, cache, smart_settings
 from typing import List, Optional
 
 import logging
+
+from smartconnect.models import SMARTRequest, SMARTResponse, Patrol
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +113,7 @@ class SmartClient:
             fo.write(ca_missionmodel.text)
 
 
-    def add_independent_incident(self, *, incident: models.IndependentIncident, ca_uuid: str = None):
+    def add_independent_incident(self, *, incident: models.SMARTRequest, ca_uuid: str = None):
 
         response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
             data=incident.json(), auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
@@ -224,13 +227,36 @@ class SmartClient:
     def get_patrol(self, *, patrol_id=None):
         patrol = None
         response = requests.get(f'{self.api}/api/query/custom/patrol',
-                                 auth=self.auth,
-                                 params= {"client_patrol_uuid": patrol_id},
-                                 verify=self.verify_ssl)
+                                auth=self.auth,
+                                params={"client_patrol_uuid": patrol_id},
+                                verify=self.verify_ssl)
+        if response.ok and len(response.json()) > 0:
+            patrol = parse_obj_as(List[Patrol], response.json())[0]
+        return patrol
+
+    def get_patrol_waypoints(self, *, patrol_id=None):
+        waypoints = None
+        response = requests.get(f'{self.api}/api/query/custom/waypoint/patrol',
+                                auth=self.auth,
+                                params={"client_patrol_uuid": patrol_id},
+                                verify=self.verify_ssl)
+
+        if response.ok and len(response.json()) > 0:
+            smart_response = parse_obj_as(List[SMARTResponse], response.json())
+            waypoints = [item.properties.waypoint for item in smart_response]
+        return waypoints
+
+    def get_incident_waypoints(self, *, incident_uuid=None):
+        waypoints = None
+        response = requests.get(f'{self.api}/api/query/custom/waypoint/incident',
+                                auth=self.auth,
+                                params={"client_incident_uuid": incident_uuid},
+                                verify=self.verify_ssl)
         # TODO: patrols created without waypoints will respond 200 but no response body
         if response.ok and len(response.json()) > 0:
-            patrol = models.PatrolResponse.parse_obj(response.json()[0])
-        return patrol
+            smart_response = parse_obj_as(List[SMARTResponse], response.json())
+            waypoints = [item.properties.waypoint for item in smart_response]
+        return waypoints
 
     def generate_patrol_label(self, *, device_id=None, prefix='wildlife', ts=None):
 
@@ -243,6 +269,45 @@ class SmartClient:
                                  data=json, auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
         if response.ok:
             logger.info("posted request to SMART successfully")
+
+    def add_patrol(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None,
+                              x=None, y=None, timestamp=None):
+        patrol_data = {
+            "type": "Feature",
+            "geometry": {
+                "coordinates": [x, y],
+                "type": "Point"
+            },
+            "properties": {
+                "dateTime": timestamp.strftime(self.SMARTCONNECT_DATFORMAT),
+
+                "smartDataType": "patrol",
+                "smartFeatureType": "patrol/new",
+                "smartAttributes": {
+                    "patrolUuid": patrol_uuid,
+                    "team": "communityteam1",
+                    "objective": "",
+                    "comment": "",
+                    "isArmed": "false",  # Dont think we have a way to determine this from ER Patrol
+                    "transportType": "foot",  # Potential to base off ER Patrol type
+                    "mandate": "followup",  # Dont think we have a way to determine this from ER Patrol
+                    "number": -999,  # ???
+                    "members": [],  # are these members specific to the leg or the patrol ?
+                    # what to do if legs have different leaders?
+                }
+            }
+        }
+
+        patrol_request = SMARTRequest.parse_obj(patrol_data)
+
+        d = patrol_request.dict()
+        attributes = d.get('properties').get('smartAttributes')
+        filtered_attributes = {k: v for k, v in attributes.items() if v is not None and v is not '' and v != []}
+        d['properties']['smartAttributes'] = filtered_attributes
+        json_data = json.dumps(d, default=str)
+
+        self.post_smart_request(json=json_data, ca_uuid=ca_uuid)
+
 
     def add_patrol_trackpoint(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
         track_point = {
