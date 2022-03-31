@@ -1,7 +1,9 @@
+import json
 import uuid
 from datetime import datetime, date
 from typing import List, Any, Optional
 
+import untangle
 from pydantic import BaseModel, Field
 
 
@@ -95,7 +97,6 @@ class Patrol(BaseModel):
     uuid: str
 
 
-
 class SMARTResponseProperties(BaseModel):
     fid: str
     patrol: Optional[Patrol]
@@ -108,9 +109,30 @@ class SMARTResponse(BaseModel):
     geometry: Geometry
     properties: SMARTResponseProperties
 
+class Names(BaseModel):
+    name: str
+    locale: Optional[str]
+
+
+class ListOptions(BaseModel):
+    id: str
+    names: List[Names]
+
+
+class PatrolMetaData(BaseModel):
+    id: str
+    names: List[Names]
+    requiredWhen: Optional[str] = 'False'
+    listOptions: Optional[List[ListOptions]] = None
+    type: str
+
+
+class PatrolDataModel(BaseModel):
+    patrolMetadata: List[PatrolMetaData]
 
 
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
+
 
 class ConservationArea(BaseModel):
     label: str
@@ -132,5 +154,133 @@ class SMARTCompositeRequest(BaseModel):
     patrol_requests : Optional[List[SMARTRequest]] = []
     waypoint_requests : Optional[List[SMARTRequest]] = []
 
-    # class Config:
-    #     arbitrary_types_allowed = True
+
+class DataModel:
+
+    def __init__(self, use_language_code='en'):
+        self.use_language_code = use_language_code
+
+    def load(self, datamodel_text):
+        self.datamodel = untangle.parse(datamodel_text)
+
+        self._categories = list(self.generate_category_paths(self.datamodel.DataModel.categories))
+        self._attributes = list(self.generate_attributes(self.datamodel.DataModel.attributes))
+
+    def save(self, filename='_si-datamodel.json'):
+        with open('_si-datamodel.json', 'w') as fo:
+            json.dump({
+                'categories': self._categories,
+                'attributes': self._attributes,
+            }, fo, indent=2)
+
+    def export_as_dict(self):
+        return {
+                'categories': self._categories,
+                'attributes': self._attributes,
+            }
+
+    def import_from_dict(self, data:dict):
+        self._categories = data.get('categories')
+        self._attributes = data.get('attributes')
+
+    def get_category(self, *, path: str = None) -> dict:
+        for cat in self._categories:
+            if cat['path'] == path:
+                return cat
+
+    def get_attribute(self, *, key:str = None) -> dict:
+        for att in self._attributes:
+            if att['key'] == key:
+                return att
+
+    def generate_category_attributes(self, root):
+        if hasattr(root, 'attribute'):
+            for attribute in root.attribute:
+                yield {
+                    'key': attribute['attributekey'],
+                    'isactive': attribute['isactive'] == 'true'
+                }
+
+    def get_list_options(self, attribute):
+        if hasattr(attribute, 'values'):
+            yield from [{
+                'key': value['key'],
+                'display': self.resolve_display(value.names, language_code=self.use_language_code)
+            } for value in attribute.values]
+
+    def get_tree_options(self, attribute):
+        if hasattr(attribute, 'tree'):
+
+            for tree_value in attribute.tree:
+                val = {
+                    'key': tree_value['key'],
+                    'display': self.resolve_display(tree_value.names, language_code=self.use_language_code)
+                }
+                yield val
+                yield from self.generate_tree_children(tree_value, prefix=val['key'])
+
+    def generate_tree_children(self, branch, prefix=''):
+        if hasattr(branch, 'children'):
+            for elem in branch.children:
+
+                if elem._name == 'children':
+                    child = elem
+
+                    this_key = '.'.join([prefix, child['key']])
+                    val = {
+                        'key': this_key,
+                        'display': self.resolve_display(child.names, language_code=self.use_language_code),
+                    }
+                    yield val
+                    yield from self.generate_tree_children(child, prefix=this_key)
+
+
+    def generate_category_paths(self, root, prefix=None):
+        '''
+
+        '''
+        if hasattr(root, 'category'):
+            for subcat in root.category:
+                if prefix:
+                    yield {
+                        'path': f'{prefix}.{subcat["key"]}',
+                        'ismultiple': subcat['ismultiple'],
+                        'attributes': list(self.generate_category_attributes(subcat)),
+                        'display': self.resolve_display(subcat.names, language_code=self.use_language_code)
+                    }
+                    new_prefix = f'{prefix}.{subcat["key"]}'
+                else:
+                    yield {
+                        'path': subcat['key'],
+                        'ismultiple': subcat['ismultiple'],
+                        'attributes': list(self.generate_category_attributes(subcat)),
+                        'display': self.resolve_display(subcat.names, language_code=self.use_language_code)
+                    }
+                    new_prefix = subcat["key"]
+                yield from self.generate_category_paths(subcat, prefix=new_prefix)
+
+    def generate_attributes(self, root):
+        if hasattr(root, 'attribute'):
+            for attribute in root.attribute:
+
+                if attribute['type'] == 'LIST':
+                    options = list(self.get_list_options(attribute))
+                elif attribute['type'] == 'TREE':
+                    options = list(self.get_tree_options(attribute))
+                else:
+                    options = None
+
+                yield {
+                    'key': attribute['key'],
+                    'type': attribute['type'],
+                    'isrequired': attribute['isrequired'] == 'true',
+                    'display': self.resolve_display(attribute.names, language_code=self.use_language_code),
+                    'options': options
+                }
+
+    def resolve_display(self, items, language_code='en'):
+        for item in items:
+            if item['language_code'] == language_code:
+                return item['value']
+        else:
+            return 'n/a'
