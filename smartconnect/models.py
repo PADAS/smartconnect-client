@@ -1,9 +1,9 @@
-from datetime import datetime, timedelta, timezone, date
-import pytz
-from pydantic import BaseModel, Field
-from typing import List,Dict, Any, Optional
-from enum import Enum
 import uuid
+from datetime import datetime, date
+from typing import List, Any, Optional
+
+from pydantic import BaseModel, Field
+
 
 class TransformationRule(BaseModel):
     match_pattern: dict
@@ -27,6 +27,7 @@ class SmartAttributes(BaseModel):
     observationGroups: Optional[List[SmartObservationGroup]]
     patrolUuid: Optional[str]
     patrolLegUuid: Optional[str]
+    incidentUuid: Optional[str]
     team: Optional[str]
     objective: Optional[str]
     comment: Optional[str]
@@ -49,6 +50,7 @@ class Properties(BaseModel):
             datetime: lambda v: v.strftime(SMARTCONNECT_DATFORMAT)
         }
 
+
 class SMARTRequest(BaseModel):
     type: str = 'Feature'
     geometry: Geometry
@@ -60,12 +62,14 @@ class Waypoint(BaseModel):
     conservation_area_uuid: str
     date: date
     id: str
+    client_uuid: Optional[str]
     last_modified: datetime
     observation_groups: List[Any] # test
     raw_x: float
     raw_y: float
     source: str
     time: str
+
 
 class PatrolLeg(BaseModel):
     client_uuid: str
@@ -76,6 +80,7 @@ class PatrolLeg(BaseModel):
     start_date = date
     type: dict
     uuid: str
+
 
 class Patrol(BaseModel):
     armed: bool
@@ -96,6 +101,7 @@ class SMARTResponseProperties(BaseModel):
     patrol: Optional[Patrol]
     patrol_leg: Optional[PatrolLeg]
     waypoint: Optional[Waypoint]
+
 
 class SMARTResponse(BaseModel):
     type: str = 'Feature'
@@ -123,8 +129,8 @@ class ConservationArea(BaseModel):
 
 
 class SMARTCompositeRequest(BaseModel):
-    patrol_requests : Optional[List[SMARTRequest]]
-    waypoint_requests : Optional[List[SMARTRequest]]
+    patrol_requests : Optional[List[SMARTRequest]] = []
+    waypoint_requests : Optional[List[SMARTRequest]] = []
 
     # class Config:
     #     arbitrary_types_allowed = True
