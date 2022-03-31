@@ -6,7 +6,6 @@ from enum import Enum
 import uuid
 
 class TransformationRule(BaseModel):
-
     match_pattern: dict
     transforms: dict
 
@@ -20,37 +19,12 @@ class SmartObservationGroup(BaseModel):
     observations: List[SmartObservation]
 
 
-class IncidentSmartAttributes(BaseModel):
-    observationGroups: Optional[List[SmartObservationGroup]]
-    comment: Optional[str]
-
-
-
-
-
-class IncidentProperties(BaseModel):
-    dateTime: datetime
-    smartDataType: str = 'incident'
-    smartFeatureType: str = 'observation'
-    smartAttributes: IncidentSmartAttributes
-
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.strftime(SMARTCONNECT_DATFORMAT)
-        }
-
-
 class Geometry(BaseModel):
     coordinates: List[float] = Field(..., max_item=2, min_items=2)
 
 
-class IndependentIncident(BaseModel):
-    type: str = 'Feature'
-    geometry: Geometry
-    properties: IncidentProperties
-
-
-class PatrolSmartAttributes(BaseModel):
+class SmartAttributes(BaseModel):
+    observationGroups: Optional[List[SmartObservationGroup]]
     patrolUuid: Optional[str]
     patrolLegUuid: Optional[str]
     team: Optional[str]
@@ -64,45 +38,21 @@ class PatrolSmartAttributes(BaseModel):
     leader: Optional[str]
 
 
-class PatrolProperties(BaseModel):
+class Properties(BaseModel):
     dateTime: datetime
-    smartDataType: str = 'patrol'
-    smartFeatureType: str = 'patrol'
-    smartAttributes: PatrolSmartAttributes
+    smartDataType: str
+    smartFeatureType: str
+    smartAttributes: SmartAttributes
 
     class Config:
         json_encoders = {
             datetime: lambda v: v.strftime(SMARTCONNECT_DATFORMAT)
         }
 
-
-class PatrolRequest(BaseModel):
+class SMARTRequest(BaseModel):
     type: str = 'Feature'
     geometry: Geometry
-    properties: PatrolProperties
-
-
-class WaypointSmartAttributes(BaseModel):
-    patrolUuid: str
-    patrolLegUuid: str
-
-
-class WaypointProperties(BaseModel):
-    dateTime: datetime
-    smartDataType: str = 'patrol'
-    smartFeatureType: str = 'waypoint/new'
-    smartAttributes: WaypointSmartAttributes
-
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.strftime(SMARTCONNECT_DATFORMAT)
-        }
-
-
-class WaypointRequest(BaseModel):
-    type: str = 'Feature'
-    geometry: Geometry
-    properties: WaypointProperties
+    properties: Properties
 
 
 class Waypoint(BaseModel):
@@ -141,17 +91,16 @@ class Patrol(BaseModel):
 
 
 
-class PatrolResponseProperties(BaseModel):
+class SMARTResponseProperties(BaseModel):
     fid: str
-    patrol: Patrol
-    patrol_leg: PatrolLeg
-    waypoint: Waypoint
+    patrol: Optional[Patrol]
+    patrol_leg: Optional[PatrolLeg]
+    waypoint: Optional[Waypoint]
 
-
-class PatrolResponse(BaseModel):
+class SMARTResponse(BaseModel):
     type: str = 'Feature'
     geometry: Geometry
-    properties: PatrolResponseProperties
+    properties: SMARTResponseProperties
 
 
 
@@ -173,9 +122,9 @@ class ConservationArea(BaseModel):
     uuid: uuid.UUID
 
 
-class SMARTRequest(BaseModel):
-    patrol_requests : Optional[List[PatrolRequest]]
-    waypoint_requests : Optional[List[WaypointRequest]]
+class SMARTCompositeRequest(BaseModel):
+    patrol_requests : Optional[List[SMARTRequest]]
+    waypoint_requests : Optional[List[SMARTRequest]]
 
     # class Config:
     #     arbitrary_types_allowed = True
