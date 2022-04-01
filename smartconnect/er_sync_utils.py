@@ -1,11 +1,9 @@
 import json
-from typing import Optional
+import logging
+
+from cdip_connector.core.schemas import ERSubject
 
 from smartconnect import PatrolDataModel
-from cdip_connector.core.schemas import ERSubject
-from pydantic.main import BaseModel
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +70,7 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
         attribute = next((x for x in attributes if x.get('key') == key), None)
         if attribute:
             if isactive: # for now we will hide inactive attributes in er events schema definition
+                # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
                 schema_definition.append(key)
             type = attribute.get('type')
             converted_type = smart_er_type_mapping[type]
@@ -104,10 +103,10 @@ def get_subjects_from_patrol_data_model(pm: PatrolDataModel):
     if members:
         for member in members.listOptions:
             if member.names:
-                subject = Subject(name=member.names[0].name,
-                                  subject_subtype='ranger',
-                                  additional=dict(smart_member_id=member.id),
-                                  is_active=True)
+                subject = ERSubject(name=member.names[0].name,
+                                    subject_subtype='ranger',
+                                    additional=dict(smart_member_id=member.id),
+                                    is_active=True)
                 subjects.append(subject)
     return subjects
 
