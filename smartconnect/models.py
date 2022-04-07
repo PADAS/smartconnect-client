@@ -153,6 +153,7 @@ class ConservationArea(BaseModel):
 class SMARTCompositeRequest(BaseModel):
     patrol_requests : Optional[List[SMARTRequest]] = []
     waypoint_requests : Optional[List[SMARTRequest]] = []
+    track_point_requests: Optional[List[SMARTRequest]] = []
 
 
 class DataModel:
