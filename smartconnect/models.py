@@ -6,6 +6,8 @@ from typing import List, Any, Optional
 import untangle
 from pydantic import BaseModel, Field
 
+SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
+
 
 class TransformationRule(BaseModel):
     match_pattern: dict
@@ -86,7 +88,7 @@ class PatrolLeg(BaseModel):
 
 class Patrol(BaseModel):
     armed: bool
-    attributes: Optional[List[Any]] # Need to test what values are in here
+    attributes: Optional[List[Any]]  # Need to test what values are in here
     client_uuid: str
     comment: str
     conservation_area: dict
@@ -108,6 +110,7 @@ class SMARTResponse(BaseModel):
     type: str = 'Feature'
     geometry: Geometry
     properties: SMARTResponseProperties
+
 
 class Names(BaseModel):
     name: str
@@ -131,9 +134,6 @@ class PatrolDataModel(BaseModel):
     patrolMetadata: List[PatrolMetaData]
 
 
-SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
-
-
 class ConservationArea(BaseModel):
     label: str
     status: str
@@ -151,8 +151,8 @@ class ConservationArea(BaseModel):
 
 
 class SMARTCompositeRequest(BaseModel):
-    patrol_requests : Optional[List[SMARTRequest]] = []
-    waypoint_requests : Optional[List[SMARTRequest]] = []
+    patrol_requests: Optional[List[SMARTRequest]] = []
+    waypoint_requests: Optional[List[SMARTRequest]] = []
     track_point_requests: Optional[List[SMARTRequest]] = []
 
 
