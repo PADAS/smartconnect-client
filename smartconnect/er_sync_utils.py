@@ -24,6 +24,7 @@ def build_earth_ranger_event_types(dm: dict):
     for cat in cats:
         path = cat.get('path')
         leaf_attributes: list = cat.get('attributes')
+        isMultiple = cat.get('ismultiple') == 'true'
         path_components = str.split(path, sep='.')
         value = '_'.join(path_components)
         display = ' '.join([s.capitalize() for s in path_components])
@@ -35,7 +36,8 @@ def build_earth_ranger_event_types(dm: dict):
             # Dont create event_types for leaves with no attributes
             continue
 
-        schema = build_schema_and_form_definition(attributes, leaf_attributes)
+        schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
+                                                  isMultiple=isMultiple)
 
         # ER API requires schema as a string
         er_event_type['schema'] = json.dumps(dict(schema=schema))
@@ -59,7 +61,7 @@ def get_inherited_attributes(cats: list, path_components: list):
     return inherited_attributes
 
 
-def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
+def build_schema_and_form_definition(*, attributes: list, leaf_attributes: list, isMultiple: bool):
     schema = dict(type='object',
                   properties={})
     schema['$schema'] = 'http://json-schema.org/draft-04/schema#'
@@ -69,19 +71,32 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
         isactive = attribute_meta.get('isactive')
         attribute = next((x for x in attributes if x.get('key') == key), None)
         if attribute:
-            if isactive: # for now we will hide inactive attributes in er events schema definition
+            if isactive:
                 # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
                 schema_definition.append(key)
-            type = attribute.get('type')
-            converted_type = smart_er_type_mapping[type]
-            display = attribute.get('display')
-            schema['properties'][key] = dict(type=converted_type,
-                                             title=display)
-            options = attribute.get('options')
-            if options:
-                option_values = [dict(title=x.get('display'), const=x.get('key')) for x in options]
-                schema['properties'][key]['items'] = dict(type='string',
-                                                          oneOf=option_values)
+            if isMultiple:
+                # create event type that allows multiple value entries
+                type = attribute.get('type')
+                converted_type = smart_er_type_mapping[type]
+                display = attribute.get('display')
+                schema['properties'][key] = dict(type=converted_type,
+                                                 title=display)
+                options = attribute.get('options')
+                if options:
+                    option_values = [dict(title=x.get('display'), const=x.get('key')) for x in options]
+                    schema['properties'][key]['items'] = dict(type='string',
+                                                              oneOf=option_values)
+            else:
+                # create event type that allows single value entry
+                display = attribute.get('display')
+                schema['properties'][key] = dict(type='string',
+                                                 title=display)
+                options = attribute.get('options')
+                if options:
+                    enum_values = [x.get('key') for x in options]
+                    enum_display = [x.get('display') for x in options]
+                    schema['properties'][key]['enum'] = enum_values
+                    schema['properties'][key]['enumNames'] = enum_display
         else:
             print('Failed to find attribute')
     schema['definition'] = schema_definition
