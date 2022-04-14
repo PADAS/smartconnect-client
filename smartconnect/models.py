@@ -151,6 +151,7 @@ class ConservationArea(BaseModel):
 
 
 class SMARTCompositeRequest(BaseModel):
+    ca_uuid: str
     patrol_requests: Optional[List[SMARTRequest]] = []
     waypoint_requests: Optional[List[SMARTRequest]] = []
     track_point_requests: Optional[List[SMARTRequest]] = []
