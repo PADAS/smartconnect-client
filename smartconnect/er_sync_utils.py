@@ -14,7 +14,7 @@ smart_er_type_mapping = {'TEXT': 'string',
                          'LIST': 'array'}
 
 
-def build_earth_ranger_event_types(dm: dict):
+def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str):
     """Builds Earth Ranger Event Types from SMART CA data model"""
     # TODO: create pydantic models for flow below
     cats = dm.get('categories')
@@ -27,6 +27,8 @@ def build_earth_ranger_event_types(dm: dict):
         isMultiple = cat.get('ismultiple') == 'true'
         path_components = str.split(path, sep='.')
         value = '_'.join(path_components)
+        # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
+        value = f'{ca_uuid}_{value}'
         display = ' '.join([s.capitalize() for s in path_components])
         er_event_type = dict(value=value,
                              display=display)
