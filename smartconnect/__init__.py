@@ -19,6 +19,11 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
 # Manually bump this.
 __version__ = '1.0.0'
 
+
+class SMARTClientException(Exception):
+    pass
+
+
 class SmartClient:
 
     # TODO: Figure out how to specify timezone.
@@ -162,6 +167,11 @@ class SmartClient:
                                  data=json, auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
         if response.ok:
             logger.info("posted request to SMART successfully")
+        else:
+            logger.error("SMART request Failed", extra=dict(ca_uuid=ca_uuid,
+                                                            request=json,
+                                                            response=response.content))
+            raise SMARTClientException
 
     # Functions for quick testing
     def add_patrol_trackpoint(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
