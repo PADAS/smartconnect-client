@@ -116,7 +116,7 @@ def er_subjects_equal(subject1: ERSubject, subject2: ERSubject):
     return subject1.name == subject2.name
 
 
-def get_subjects_from_patrol_data_model(pm: PatrolDataModel):
+def get_subjects_from_patrol_data_model(pm: PatrolDataModel, ca_uuid: str):
     # create ER subjects from Patrol Data Model members
     members = next((metaData for metaData in pm.patrolMetadata if metaData.id == "members"), None)
     subjects = []
@@ -125,7 +125,8 @@ def get_subjects_from_patrol_data_model(pm: PatrolDataModel):
             if member.names:
                 subject = ERSubject(name=member.names[0].name,
                                     subject_subtype='ranger',
-                                    additional=dict(smart_member_id=member.id),
+                                    additional=dict(smart_member_id=member.id,
+                                                    ca_uuid=ca_uuid),
                                     is_active=True)
                 subjects.append(subject)
     return subjects
