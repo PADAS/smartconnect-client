@@ -73,10 +73,13 @@ def build_schema_and_form_definition(*, attributes: list, leaf_attributes: list,
         isactive = attribute_meta.get('isactive')
         attribute = next((x for x in attributes if x.get('key') == key), None)
         if attribute:
-            if isactive:
+            if not isactive:
                 # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
-                schema_definition.append(key)
-            if isMultiple:
+                #  Excluding entirely for now until that ability is determined
+                # schema_definition.append(key)
+                continue
+            # Right now we are not supporting multiple observation support
+            if isMultiple and False:
                 # create event type that allows multiple value entries
                 type = attribute.get('type')
                 converted_type = smart_er_type_mapping[type]
