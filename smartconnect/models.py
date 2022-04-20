@@ -31,6 +31,7 @@ class SmartAttributes(BaseModel):
     observationGroups: Optional[List[SmartObservationGroup]]
     patrolUuid: Optional[str]
     patrolLegUuid: Optional[str]
+    patrolId: Optional[str]
     incidentUuid: Optional[str]
     team: Optional[str]
     objective: Optional[str]
