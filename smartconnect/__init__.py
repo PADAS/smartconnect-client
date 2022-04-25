@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataModel, DataModel
 
 # Manually bump this.
-__version__ = '1.0.0'
+__version__ = '1.0.2'
 
 
 class SMARTClientException(Exception):
