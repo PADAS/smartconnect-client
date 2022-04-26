@@ -19,6 +19,8 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
 # Manually bump this.
 __version__ = '1.0.0'
 
+DEFAULT_TIMEOUT = (3.1, 20)
+
 
 class SMARTClientException(Exception):
     pass
@@ -45,7 +47,8 @@ class SmartClient:
                             headers={
                                 'accept': 'application/json',
                             },
-                            verify=self.verify_ssl
+                            verify=self.verify_ssl,
+                            timeout=DEFAULT_TIMEOUT
                             )
 
         if cas.ok:
@@ -61,7 +64,8 @@ class SmartClient:
                 'accept': 'application/xml',
             },
             stream=True,
-            verify=self.verify_ssl)
+            verify=self.verify_ssl,
+            timeout=DEFAULT_TIMEOUT)
         ca_datamodel.raw.decode_content = True
 
         self.logger.info('Downloaded CA Datamodel. Status code is: %s', ca_datamodel.status_code)
@@ -83,7 +87,8 @@ class SmartClient:
                 'accept': 'application/json',
             },
             stream=True,
-            verify=self.verify_ssl)
+            verify=self.verify_ssl,
+            timeout=DEFAULT_TIMEOUT)
         ca_patrolmodel.raw.decode_content = True
 
         self.logger.info('Downloaded CA Patrol Model. Status code is: %s', ca_patrolmodel.status_code)
@@ -103,7 +108,8 @@ class SmartClient:
                 'accept': 'application/json',
             },
             stream=True,
-            verify=self.verify_ssl)
+            verify=self.verify_ssl,
+            timeout=DEFAULT_TIMEOUT)
         ca_missionmodel.raw.decode_content = True
 
         self.logger.info('Downloaded CA Mission Model. Status code is: %s', ca_missionmodel.status_code)
@@ -128,7 +134,8 @@ class SmartClient:
         response = requests.get(f'{self.api}/api/query/custom/patrol',
                                  auth=self.auth,
                                  params= {"client_patrol_uuid": patrol_id},
-                                 verify=self.verify_ssl)
+                                 verify=self.verify_ssl,
+                                 timeout=DEFAULT_TIMEOUT)
         if response.ok and len(response.json()) > 0:
             patrol = parse_obj_as(List[Patrol],response.json())[0]
         return patrol
@@ -138,7 +145,8 @@ class SmartClient:
         response = requests.get(f'{self.api}/api/query/custom/waypoint/patrol',
                                  auth=self.auth,
                                  params= {"client_patrol_uuid": patrol_id},
-                                 verify=self.verify_ssl)
+                                 verify=self.verify_ssl,
+                                 timeout=DEFAULT_TIMEOUT)
 
         if response.ok and len(response.json()) > 0:
             smart_response = parse_obj_as(List[SMARTResponse],response.json())
@@ -150,7 +158,8 @@ class SmartClient:
         response = requests.get(f'{self.api}/api/query/custom/waypoint/incident',
                                 auth=self.auth,
                                 params={"client_incident_uuid": incident_uuid},
-                                verify=self.verify_ssl)
+                                verify=self.verify_ssl,
+                                timeout=DEFAULT_TIMEOUT)
 
         if response.ok and len(response.json()) > 0:
             smart_response = parse_obj_as(List[SMARTResponse], response.json())
@@ -163,8 +172,12 @@ class SmartClient:
         return '/'.join( (prefix, device_id, ts.strftime('%Y/%m')) )
 
     def post_smart_request(self, *, json: str, ca_uuid: str = None):
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
-                                 data=json, auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
+        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+                                 headers={'content-type': 'application/json'},
+                                 data=json,
+                                 auth=self.auth,
+                                 timeout=DEFAULT_TIMEOUT,
+                                 verify=self.verify_ssl)
         if response.ok:
             logger.info("posted request to SMART successfully")
         else:
