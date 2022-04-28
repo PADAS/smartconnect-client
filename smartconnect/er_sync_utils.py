@@ -1,4 +1,11 @@
 import json
+import logging
+
+from cdip_connector.core.schemas import ERSubject
+
+from smartconnect import PatrolDataModel
+
+logger = logging.getLogger(__name__)
 
 smart_er_type_mapping = {'TEXT': 'string',
                          'NUMERIC': 'number',
@@ -7,8 +14,9 @@ smart_er_type_mapping = {'TEXT': 'string',
                          'LIST': 'array'}
 
 
-def build_earth_ranger_event_types(dm: dict):
+def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str):
     """Builds Earth Ranger Event Types from SMART CA data model"""
+    # TODO: create pydantic models for flow below
     cats = dm.get('categories')
     attributes = dm.get('attributes')
     er_event_types = []
@@ -16,8 +24,11 @@ def build_earth_ranger_event_types(dm: dict):
     for cat in cats:
         path = cat.get('path')
         leaf_attributes: list = cat.get('attributes')
+        isMultiple = cat.get('ismultiple') == 'true'
         path_components = str.split(path, sep='.')
         value = '_'.join(path_components)
+        # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
+        value = f'{ca_uuid}_{value}'
         display = ' '.join([s.capitalize() for s in path_components])
         er_event_type = dict(value=value,
                              display=display)
@@ -27,7 +38,8 @@ def build_earth_ranger_event_types(dm: dict):
             # Dont create event_types for leaves with no attributes
             continue
 
-        schema = build_schema_and_form_definition(attributes, leaf_attributes)
+        schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
+                                                  isMultiple=isMultiple)
 
         # ER API requires schema as a string
         er_event_type['schema'] = json.dumps(dict(schema=schema))
@@ -51,7 +63,7 @@ def get_inherited_attributes(cats: list, path_components: list):
     return inherited_attributes
 
 
-def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
+def build_schema_and_form_definition(*, attributes: list, leaf_attributes: list, isMultiple: bool):
     schema = dict(type='object',
                   properties={})
     schema['$schema'] = 'http://json-schema.org/draft-04/schema#'
@@ -61,18 +73,35 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
         isactive = attribute_meta.get('isactive')
         attribute = next((x for x in attributes if x.get('key') == key), None)
         if attribute:
-            if isactive: # for now we will hide inactive attributes in er events schema definition
-                schema_definition.append(key)
-            type = attribute.get('type')
-            converted_type = smart_er_type_mapping[type]
-            display = attribute.get('display')
-            schema['properties'][key] = dict(type=converted_type,
-                                             title=display)
-            options = attribute.get('options')
-            if options:
-                option_values = [dict(title=x.get('display'), const=x.get('key')) for x in options]
-                schema['properties'][key]['items'] = dict(type='string',
-                                                          oneOf=option_values)
+            if not isactive:
+                # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
+                #  Excluding entirely for now until that ability is determined
+                # schema_definition.append(key)
+                continue
+            # Right now we are not supporting multiple observation support
+            if isMultiple and False:
+                # create event type that allows multiple value entries
+                type = attribute.get('type')
+                converted_type = smart_er_type_mapping[type]
+                display = attribute.get('display')
+                schema['properties'][key] = dict(type=converted_type,
+                                                 title=display)
+                options = attribute.get('options')
+                if options:
+                    option_values = [dict(title=x.get('display'), const=x.get('key')) for x in options]
+                    schema['properties'][key]['items'] = dict(type='string',
+                                                              oneOf=option_values)
+            else:
+                # create event type that allows single value entry
+                display = attribute.get('display')
+                schema['properties'][key] = dict(type='string',
+                                                 title=display)
+                options = attribute.get('options')
+                if options:
+                    enum_values = [x.get('key') for x in options]
+                    enum_display = [x.get('display') for x in options]
+                    schema['properties'][key]['enum'] = enum_values
+                    schema['properties'][key]['enumNames'] = enum_display
         else:
             print('Failed to find attribute')
     schema['definition'] = schema_definition
@@ -81,5 +110,27 @@ def build_schema_and_form_definition(attributes: list, leaf_attributes: list):
 
 def er_event_type_schemas_equal(schema1: dict, schema2: dict):
     return schema1.get('properties') == schema2.get('properties') and schema1.get('definition') == schema2.get('definition')
+
+
+def er_subjects_equal(subject1: ERSubject, subject2: ERSubject):
+    return subject1.name == subject2.name
+
+
+def get_subjects_from_patrol_data_model(pm: PatrolDataModel, ca_uuid: str):
+    # create ER subjects from Patrol Data Model members
+    members = next((metaData for metaData in pm.patrolMetadata if metaData.id == "members"), None)
+    subjects = []
+    if members:
+        for member in members.listOptions:
+            if member.names:
+                subject = ERSubject(name=member.names[0].name,
+                                    subject_subtype='ranger',
+                                    additional=dict(smart_member_id=member.id,
+                                                    ca_uuid=ca_uuid),
+                                    is_active=True)
+                subjects.append(subject)
+    return subjects
+
+
 
 
