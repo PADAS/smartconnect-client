@@ -70,14 +70,14 @@ def build_schema_and_form_definition(*, attributes: list, leaf_attributes: list,
     schema_definition = []
     for attribute_meta in leaf_attributes:
         key = attribute_meta.get('key')
-        isactive = attribute_meta.get('isactive')
+        is_active = attribute_meta.get('isactive')
         attribute = next((x for x in attributes if x.get('key') == key), None)
         if attribute:
-            if not isactive:
+            if not is_active:
                 # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
-                #  Excluding entirely for now until that ability is determined
-                # schema_definition.append(key)
+                #  Excluding entirely form schema for now if not is_active until that ability is determined
                 continue
+            schema_definition.append(key)
             # Right now we are not supporting multiple observation support
             if isMultiple and False:
                 # create event type that allows multiple value entries
