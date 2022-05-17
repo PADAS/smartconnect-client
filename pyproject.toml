@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "smartconnect-client"
-version = "1.0.14"
+version = "1.0.15"
 description = ""
 authors = ["Chris Doehring <***REMOVED***oehring@gmail.com>"]
 
