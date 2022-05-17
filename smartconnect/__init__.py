@@ -19,7 +19,7 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
 # Manually bump this.
 __version__ = '1.0.3'
 
-DEFAULT_TIMEOUT = (3.1, 20)
+DEFAULT_TIMEOUT = (3.1, 60)
 
 
 class SMARTClientException(Exception):
@@ -67,6 +67,8 @@ class SmartClient:
             verify=self.verify_ssl,
             timeout=DEFAULT_TIMEOUT)
         ca_datamodel.raw.decode_content = True
+
+        self.logger.debug(f'Download CA Data model took {ca_datamodel.elapsed.total_seconds()} seconds')
 
         self.logger.info('Downloaded CA Datamodel. Status code is: %s', ca_datamodel.status_code)
 
