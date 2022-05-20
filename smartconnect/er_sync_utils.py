@@ -35,11 +35,17 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str):
         inherited_attributes = get_inherited_attributes(cats, path_components)
         leaf_attributes.extend(inherited_attributes)
         if not leaf_attributes:
+            logger.warning(f'Skipping event type, no leaf attributes detected', extra=dict(event_type=er_event_type))
             # Dont create event_types for leaves with no attributes
             continue
 
         schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
                                                   isMultiple=isMultiple)
+
+        if not schema['properties']:
+            logger.warning(f'Skipping event type, no schema properties detected', extra=dict(event_type=er_event_type))
+            # ER wont create event with no schema properties
+            continue
 
         # ER API requires schema as a string
         er_event_type['schema'] = json.dumps(dict(schema=schema))
