@@ -32,6 +32,7 @@ class SmartAttributes(BaseModel):
     patrolUuid: Optional[str]
     patrolLegUuid: Optional[str]
     patrolId: Optional[str]
+    incidentId: Optional[str]
     incidentUuid: Optional[str]
     team: Optional[str]
     objective: Optional[str]
