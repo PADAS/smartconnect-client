@@ -79,9 +79,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str):
         path_components = str.split(cat.path, sep='.')
         value = '_'.join(path_components)
         # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
-        # TODO: Set this back
-        # value = f'{ca_uuid}_{value}'
-        value = f'test_{ca_uuid}_{value}'
+        value = f'{ca_uuid}_{value}'
         display = cat.display
         inherited_attributes = get_inherited_attributes(cats, path_components)
         leaf_attributes.extend(inherited_attributes)
