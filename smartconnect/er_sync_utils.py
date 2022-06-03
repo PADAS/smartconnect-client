@@ -65,7 +65,7 @@ def is_leaf_category(*, cat_paths, cur_path):
     return is_leaf
 
 
-def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str):
+def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str):
     """Builds Earth Ranger Event Types from SMART CA data model"""
     cats = parse_obj_as(List[Category], dm.get('categories'))
     cat_paths = [cat.path for cat in cats]
@@ -80,7 +80,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str):
         value = '_'.join(path_components)
         # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
         value = f'{ca_uuid}_{value}'
-        display = cat.display
+        display = f'{ca_identifier} - {cat.display}'
         inherited_attributes = get_inherited_attributes(cats, path_components)
         leaf_attributes.extend(inherited_attributes)
         if not leaf_attributes:
@@ -167,7 +167,6 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                          properties=properties,
                          type='object')
     return schema
-
 
 def er_event_type_schemas_equal(schema1: dict, schema2: dict):
     return schema1.get('properties') == schema2.get('properties') and schema1.get('definition') == schema2.get('definition')
