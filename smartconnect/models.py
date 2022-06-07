@@ -97,7 +97,7 @@ class Patrol(BaseModel):
     end_date: date
     id: str
     start_date: date
-    team: dict
+    team: Optional[dict]
     uuid: str
 
 
