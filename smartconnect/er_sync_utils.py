@@ -153,7 +153,9 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
             else:
                 # create event type that allows single value entry
                 display = attribute.display
-                properties[key] = dict(type='string',
+                converted_type = smart_er_type_mapping[attribute.type]
+                converted_type = converted_type if converted_type is not 'array' else 'string'
+                properties[key] = dict(type=converted_type,
                                        title=display)
                 options = attribute.options
                 if options:
