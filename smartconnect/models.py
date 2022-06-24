@@ -249,6 +249,7 @@ class DataModel:
                     yield {
                         'path': f'{prefix}.{subcat["key"]}',
                         'ismultiple': subcat['ismultiple'],
+                        'isactive': subcat['isactive'],
                         'attributes': list(self.generate_category_attributes(subcat)),
                         'display': self.resolve_display(subcat.names, language_code=self.use_language_code)
                     }
@@ -257,6 +258,7 @@ class DataModel:
                     yield {
                         'path': subcat['key'],
                         'ismultiple': subcat['ismultiple'],
+                        'isactive': subcat['isactive'],
                         'attributes': list(self.generate_category_attributes(subcat)),
                         'display': self.resolve_display(subcat.names, language_code=self.use_language_code)
                     }

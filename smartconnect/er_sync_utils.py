@@ -25,6 +25,7 @@ class Category(BaseModel):
     path: str
     display: str
     is_multiple: Optional[bool] = Field(alias="ismultiple", default=False)
+    is_active: Optional[bool] = Field(alias="isactive", default=True)
     attributes: Optional[List[CategoryAttribute]]
 
 class AttributeOption(BaseModel):
@@ -55,11 +56,11 @@ class EREventType(BaseModel):
     event_schema: str = Field(alias="schema")
     is_active: bool = True
 
-def is_leaf_category(*, cat_paths, cur_path):
+def is_leaf_node(*, node_paths, cur_node):
     is_leaf = True
-    for path in cat_paths:
+    for path in node_paths:
         # determine if current path is subset of any category path
-        if cur_path in path and len(path) > len(cur_path):
+        if cur_node in path and len(path) > len(cur_node) and '.' in path:
             is_leaf = False
             break
     return is_leaf
@@ -75,7 +76,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
     for cat in cats:
         leaf_attributes = cat.attributes
         is_multiple = cat.is_multiple
-        is_active = is_leaf_category(cat_paths=cat_paths, cur_path=cat.path)
+        is_active = cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path)
         path_components = str.split(cat.path, sep='.')
         value = '_'.join(path_components)
         # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
@@ -122,6 +123,14 @@ def get_inherited_attributes(cats: List[Category], path_components: list):
             inherited_attributes.extend(parent_attributes)
     return inherited_attributes
 
+def get_leaf_options(options):
+    leaf_options = []
+    option_keys = [option.key for option in options]
+    for option in options:
+        if is_leaf_node(node_paths=option_keys, cur_node=option.key):
+            leaf_options.append(option)
+    return leaf_options
+
 
 def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attributes: List[CategoryAttribute], is_multiple: bool):
     properties = {}
@@ -147,6 +156,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                                        title=display)
                 options = attribute.options
                 if options:
+                    options = get_leaf_options(options)
                     option_values = [dict(title=x.display, const=x.key) for x in options]
                     properties[key]['items'] = dict(type='string',
                                                     oneOf=option_values)
@@ -159,6 +169,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                                        title=display)
                 options = attribute.options
                 if options:
+                    options = get_leaf_options(options)
                     enum_values = [x.key for x in options]
                     enum_display = [x.display for x in options]
                     properties[key]['enum'] = enum_values
