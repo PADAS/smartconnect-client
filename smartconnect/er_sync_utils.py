@@ -53,7 +53,7 @@ class EREventType(BaseModel):
     category: Optional[str]
     value: str
     display: str
-    event_schema: str = Field(alias="schema")
+    event_schema: Optional[str] = Field(alias="schema")
     is_active: bool = True
 
 def is_leaf_node(*, node_paths, cur_node):
@@ -84,26 +84,30 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
         display = f'{ca_identifier} - {cat.display}'
         inherited_attributes = get_inherited_attributes(cats, path_components)
         leaf_attributes.extend(inherited_attributes)
-        if not leaf_attributes:
-            logger.warning(f'Skipping event type, no leaf attributes detected', extra=dict(value=value,
-                                                                                           display=display))
-            # Dont create event_types for leaves with no attributes
-            continue
-
-        schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
-                                                  is_multiple=is_multiple)
-
-        if not schema.properties:
-            logger.warning(f'Skipping event type, no schema properties detected', extra=dict(event_type=er_event_type))
-            # ER wont create event with no schema properties
-            continue
 
         er_event_type = EREventType(value=value,
                                     display=display,
-                                    schema=json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True)),
                                     is_active=is_active)
 
-        # ER API requires schema as a string
+        if is_active:
+            if not leaf_attributes:
+                logger.warning(f'Skipping event type, no leaf attributes detected', extra=dict(value=value,
+                                                                                               display=display))
+                # Dont create event_types for leaves with no attributes
+                continue
+
+            schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
+                                                      is_multiple=is_multiple)
+
+            if not schema.properties:
+                logger.warning(f'Skipping event type, no schema properties detected',
+                               extra=dict(event_type=er_event_type))
+                # ER wont create event with no schema properties
+                continue
+
+            # ER API requires schema as a string
+            er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True))
+
         er_event_types.append(er_event_type)
     return er_event_types
 
