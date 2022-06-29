@@ -6,6 +6,7 @@ import pytz
 import json
 
 from smartconnect import SmartClient, utils
+    get_subjects_from_patrol_data_model, ERSubject, er_subjects_equal
 
 # Testing CA: Sintegrate at connect7.refractions.net:8443/server/connect/home
 # CA_UUID = '8f7fbe1b-201a-4ef4-bda8-14f5581e65ce'
