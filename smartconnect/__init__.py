@@ -104,7 +104,7 @@ class SmartClient:
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
-    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.0"):
+    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5"):
         self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
         self.password = password
