@@ -14,7 +14,7 @@ from smartconnect import models, cache, smart_settings
 
 logger = logging.getLogger(__name__)
 
-from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataModel, DataModel
+from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataModel, DataModel, ConservationArea
 
 # Manually bump this.
 __version__ = '1.0.3'
@@ -26,20 +26,141 @@ class SMARTClientException(Exception):
     pass
 
 
+BLANK_DATAMODEL_CONTENT = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<DataModel xmlns="http://www.smartconservationsoftware.org/xml/1.0/datamodel">
+    <languages>
+        <language code="en"/>
+    </languages>
+    <attributes>
+        <attribute key="bright_ti4" isrequired="false" type="NUMERIC">
+            <aggregations aggregation="avg"/>
+            <aggregations aggregation="max"/>
+            <aggregations aggregation="min"/>
+            <aggregations aggregation="stddev_samp"/>
+            <aggregations aggregation="sum"/>
+            <aggregations aggregation="var_samp"/>
+            <names language_code="en" value="Brightness ti4"/>
+        </attribute>
+        <attribute key="bright_ti5" isrequired="false" type="NUMERIC">
+            <aggregations aggregation="avg"/>
+            <aggregations aggregation="max"/>
+            <aggregations aggregation="min"/>
+            <aggregations aggregation="stddev_samp"/>
+            <aggregations aggregation="sum"/>
+            <aggregations aggregation="var_samp"/>
+            <names language_code="en" value="Brightness ti5"/>
+        </attribute>
+        <attribute key="fireradiativepower" isrequired="false" type="TEXT">
+            <qa_regex></qa_regex>
+            <names language_code="en" value="Fire Radiative Power"/>
+        </attribute>
+        <attribute key="frp" isrequired="false" type="NUMERIC">
+            <aggregations aggregation="avg"/>
+            <aggregations aggregation="max"/>
+            <aggregations aggregation="min"/>
+            <aggregations aggregation="stddev_samp"/>
+            <aggregations aggregation="sum"/>
+            <aggregations aggregation="var_samp"/>
+            <names language_code="en" value="Fire Radiative Power"/>
+        </attribute>
+        <attribute key="confidence" isrequired="false" type="NUMERIC">
+            <aggregations aggregation="avg"/>
+            <aggregations aggregation="max"/>
+            <aggregations aggregation="min"/>
+            <aggregations aggregation="stddev_samp"/>
+            <aggregations aggregation="sum"/>
+            <aggregations aggregation="var_samp"/>
+            <names language_code="en" value="Confidence"/>
+        </attribute>
+        <attribute key="clustered_alerts" isrequired="false" type="NUMERIC">
+            <aggregations aggregation="avg"/>
+            <aggregations aggregation="max"/>
+            <aggregations aggregation="min"/>
+            <aggregations aggregation="stddev_samp"/>
+            <aggregations aggregation="sum"/>
+            <aggregations aggregation="var_samp"/>
+            <names language_code="en" value="Clustered Alerts"/>
+        </attribute>
+    </attributes>
+    <categories>
+        <category key="gfwfirealert" ismultiple="true" isactive="true" iconkey="fire">
+            <names language_code="en" value="GFW Fire Alert"/>
+            <attribute isactive="true" attributekey="bright_ti4"/>
+            <attribute isactive="true" attributekey="bright_ti5"/>
+            <attribute isactive="true" attributekey="frp"/>
+            <attribute isactive="true" attributekey="clustered_alerts"/>
+        </category>
+        <category key="gfwgladalert" ismultiple="true" isactive="true" iconkey="stump">
+            <names language_code="en" value="GFW Glad Alert"/>
+            <attribute isactive="true" attributekey="confidence"/>
+        </category>
+    </categories>
+</DataModel>
+"""
+
+
 class SmartClient:
 
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
-    def __init__(self, *, api=None, username=None, password=None, use_language_code='en'):
+    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.0"):
         self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
         self.password = password
         self.auth=HTTPBasicAuth(self.username, self.password)
         self.use_language_code=use_language_code
+        self.version=version
 
         self.logger = logging.getLogger(SmartClient.__name__)
         self.verify_ssl = smart_settings.SMART_SSL_VERIFY
+
+    def get_conservation_area(self, *, ca_uuid: str = None):
+        cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
+        self.logger.info(f"Looking up CA cached at {cache_key}.")
+        try:
+            cached_data = cache.cache.get(cache_key)
+            if cached_data:
+                self.logger.info(f"Found CA cached at {cache_key}.")
+                conservation_area = ConservationArea.parse_raw(cached_data)
+                return conservation_area
+
+            self.logger.info(f"Cache miss for {cache_key}")
+        except:
+            self.logger.info(f"Cache miss/error for {cache_key}")
+            pass
+
+        try:
+            self.logger.info(
+                "Querying Smart Connect for CAs at endpoint: %s, username: %s",
+                self.api,
+                self.username,
+            )
+
+            for ca in self.get_conservation_areas():
+                if ca.uuid == uuid.UUID(ca_uuid):
+                    conservation_area = ca
+                    break
+            else:
+                logger.error(
+                    f"Can't find a Conservation Area with UUID: {ca_uuid}"
+                )
+                conservation_area = None
+
+            if conservation_area:
+                self.logger.info(f"Caching CA metadata at {cache_key}")
+                cache.cache.set(
+                    name=cache_key,
+                    value=json.dumps(dict(conservation_area), default=str),
+                )
+
+            return conservation_area
+
+        except Exception as ex:
+            self.logger.exception(
+                f"Failed to get Conservation Areas", extra=dict(ca_uuid=ca_uuid)
+            )
+            raise SMARTClientException(f"Failed to get SMART Conservation Areas")
 
     def get_conservation_areas(self) -> List[models.ConservationArea]:
         cas = requests.get(f'{self.api}/api/conservationarea',
@@ -55,6 +176,44 @@ class SmartClient:
             cas = cas.json()
 
         return [models.ConservationArea.parse_obj(ca) for ca in cas]
+
+    def get_data_model(self, *, ca_uuid: str = None):
+        # CA Data Model is not available for versions below 7. Use a blank.
+        if self.version.startswith("6"):
+            blank_datamodel = DataModel()
+            blank_datamodel.load(BLANK_DATAMODEL_CONTENT)
+            return blank_datamodel
+
+        cache_key = f"cache:smart-ca:{ca_uuid}:datamodel"
+        try:
+            cached_data = cache.cache.get(cache_key)
+            if cached_data:
+                dm = DataModel()
+                dm.import_from_dict(json.loads(cached_data))
+                self.logger.debug(
+                    f"Using cached SMART Datamodel", extra={"cached_key": cache_key}
+                )
+                return dm
+
+        except Exception:
+            pass
+
+        logger.debug(f"Cache miss for SMART Datamodel", extra={"cached_key": cache_key})
+
+        try:
+            ca_datamodel = self.download_datamodel(
+                ca_uuid=ca_uuid
+            )
+        except Exception as e:
+            raise SMARTClientException("Failed downloading SMART Datamodel")
+
+        if ca_datamodel:
+            cache.cache.set(
+                name=cache_key,
+                value=json.dumps(ca_datamodel.export_as_dict()),
+            )
+
+        return ca_datamodel
 
     def download_datamodel(self, *, ca_uuid: str = None):
 
