@@ -1,5 +1,5 @@
 import redis
-import smart_settings
+from smartconnect import smart_settings
 
 
 cache = redis.Redis(
