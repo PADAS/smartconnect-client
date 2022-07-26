@@ -316,7 +316,8 @@ class SmartClient:
 
     def get_incident(self, *, incident_uuid=None):
         smart_response = None
-        response = requests.get(f'{self.api}/api/query/custom/waypoint/incident',
+        url = f'{self.api}/api/query/custom/waypoint/incident'
+        response = requests.get(url,
                                 auth=self.auth,
                                 params={"client_incident_uuid": incident_uuid},
                                 verify=self.verify_ssl,
@@ -324,6 +325,9 @@ class SmartClient:
 
         if response.ok and len(response.json()) > 0:
             smart_response = parse_obj_as(List[SMARTResponse], response.json())
+        else:
+            logger.error("Bad response from SMART Connect", extra=dict(url=url,
+                                                                       response_content=response.content))
         return smart_response
 
     def generate_patrol_label(self, *, device_id=None, prefix='wildlife', ts=None):
