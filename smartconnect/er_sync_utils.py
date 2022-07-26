@@ -85,6 +85,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
         inherited_attributes = get_inherited_attributes(cats, path_components)
         leaf_attributes.extend(inherited_attributes)
 
+
         er_event_type = EREventType(value=value,
                                     display=display,
                                     is_active=is_active)
@@ -180,10 +181,16 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                     properties[key]['enumNames'] = enum_display
         else:
             print('Failed to find attribute')
+    append_custom_attributes(properties=properties)
     schema = EventSchema(definition=schema_definition,
                          properties=properties,
                          type='object')
     return schema
+
+def append_custom_attributes(properties):
+    key = 'smart_observation_uuid'
+    properties[key] = dict(type='string',
+                           title='SMART Observation UUID')
 
 def er_event_type_schemas_equal(schema1: dict, schema2: dict):
     return schema1.get('properties') == schema2.get('properties') and schema1.get('definition') == schema2.get('definition')

@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime, date
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Union
 
 import untangle
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ class TransformationRule(BaseModel):
 
 
 class SmartObservation(BaseModel):
+    observationUuid: Optional[str]
     category: str
     attributes: dict
 
@@ -49,9 +50,10 @@ class Properties(BaseModel):
     dateTime: datetime
     smartDataType: str
     smartFeatureType: str
-    smartAttributes: SmartAttributes
+    smartAttributes: Union[SmartAttributes, SmartObservation]
 
     class Config:
+        smart_union = True
         json_encoders = {
             datetime: lambda v: v.strftime(SMARTCONNECT_DATFORMAT)
         }
