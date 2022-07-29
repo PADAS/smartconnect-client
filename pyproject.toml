@@ -19,7 +19,6 @@ untangle = "^1.1.1"
 dateparser = "^1.0.0"
 timezonefinder = "^5.2.0"
 environs= "^9.3.0"
-packaging= "^20.9"
 
 
 [tool.poetry.dev-dependencies]
