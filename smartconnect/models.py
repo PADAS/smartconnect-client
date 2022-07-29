@@ -50,7 +50,7 @@ class Properties(BaseModel):
     dateTime: datetime
     smartDataType: str
     smartFeatureType: str
-    smartAttributes: Union[SmartAttributes, SmartObservation]
+    smartAttributes: Union[SmartObservation, SmartAttributes]
 
     class Config:
         smart_union = True
