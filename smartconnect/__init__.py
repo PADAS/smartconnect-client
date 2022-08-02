@@ -115,20 +115,21 @@ class SmartClient:
         self.logger = logging.getLogger(SmartClient.__name__)
         self.verify_ssl = smart_settings.SMART_SSL_VERIFY
 
-    def get_conservation_area(self, *, ca_uuid: str = None):
+    def get_conservation_area(self, *, ca_uuid: str = None, use_cache: bool = True):
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
-        self.logger.info(f"Looking up CA cached at {cache_key}.")
-        try:
-            cached_data = cache.cache.get(cache_key)
-            if cached_data:
-                self.logger.info(f"Found CA cached at {cache_key}.")
-                conservation_area = ConservationArea.parse_raw(cached_data)
-                return conservation_area
+        if use_cache:
+            self.logger.info(f"Looking up CA cached at {cache_key}.")
+            try:
+                cached_data = cache.cache.get(cache_key)
+                if cached_data:
+                    self.logger.info(f"Found CA cached at {cache_key}.")
+                    conservation_area = ConservationArea.parse_raw(cached_data)
+                    return conservation_area
 
-            self.logger.info(f"Cache miss for {cache_key}")
-        except:
-            self.logger.info(f"Cache miss/error for {cache_key}")
-            pass
+                self.logger.info(f"Cache miss for {cache_key}")
+            except:
+                self.logger.info(f"Cache miss/error for {cache_key}")
+                pass
 
         try:
             self.logger.info(
@@ -177,7 +178,7 @@ class SmartClient:
 
         return [models.ConservationArea.parse_obj(ca) for ca in cas]
 
-    def get_data_model(self, *, ca_uuid: str = None):
+    def get_data_model(self, *, ca_uuid: str = None, use_cache: bool = True):
         # CA Data Model is not available for versions below 7. Use a blank.
         if self.version.startswith("6"):
             blank_datamodel = DataModel()
@@ -185,20 +186,21 @@ class SmartClient:
             return blank_datamodel
 
         cache_key = f"cache:smart-ca:{ca_uuid}:datamodel"
-        try:
-            cached_data = cache.cache.get(cache_key)
-            if cached_data:
-                dm = DataModel()
-                dm.import_from_dict(json.loads(cached_data))
-                self.logger.debug(
-                    f"Using cached SMART Datamodel", extra={"cached_key": cache_key}
-                )
-                return dm
+        if use_cache:
+            try:
+                cached_data = cache.cache.get(cache_key)
+                if cached_data:
+                    dm = DataModel()
+                    dm.import_from_dict(json.loads(cached_data))
+                    self.logger.debug(
+                        f"Using cached SMART Datamodel", extra={"cached_key": cache_key}
+                    )
+                    return dm
 
-        except Exception:
-            pass
+            except Exception:
+                pass
 
-        logger.debug(f"Cache miss for SMART Datamodel", extra={"cached_key": cache_key})
+            logger.debug(f"Cache miss for SMART Datamodel", extra={"cached_key": cache_key})
 
         try:
             ca_datamodel = self.download_datamodel(
@@ -316,7 +318,8 @@ class SmartClient:
 
     def get_incident(self, *, incident_uuid=None):
         smart_response = None
-        response = requests.get(f'{self.api}/api/query/custom/waypoint/incident',
+        url = f'{self.api}/api/query/custom/waypoint/incident'
+        response = requests.get(url,
                                 auth=self.auth,
                                 params={"client_incident_uuid": incident_uuid},
                                 verify=self.verify_ssl,
@@ -324,6 +327,9 @@ class SmartClient:
 
         if response.ok and len(response.json()) > 0:
             smart_response = parse_obj_as(List[SMARTResponse], response.json())
+        else:
+            logger.error("Bad response from SMART Connect", extra=dict(url=url,
+                                                                       response_content=response.content))
         return smart_response
 
     def generate_patrol_label(self, *, device_id=None, prefix='wildlife', ts=None):
