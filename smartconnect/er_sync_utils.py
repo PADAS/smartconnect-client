@@ -1,12 +1,14 @@
 import json
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from uuid import UUID
 
+import pydantic
 from cdip_connector.core.schemas import ERSubject
 from pydantic import BaseModel, parse_obj_as, Field
 
-from smartconnect import PatrolDataModel
+from smartconnect import PatrolDataModel, cache
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,15 @@ class EREventType(BaseModel):
     event_schema: Optional[str] = Field(alias="schema")
     is_active: bool = True
 
+
+class EarthRangerReaderState(pydantic.BaseModel):
+    event_last_poll_at: Optional[datetime] = datetime.now(tz=timezone.utc) - timedelta(
+        days=7
+    )
+    patrol_last_poll_at: Optional[datetime] = datetime.now(tz=timezone.utc) - timedelta(
+        days=7
+    )
+
 def is_leaf_node(*, node_paths, cur_node):
     is_leaf = True
     for path in node_paths:
@@ -84,6 +95,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
         display = f'{ca_identifier} - {cat.display}'
         inherited_attributes = get_inherited_attributes(cats, path_components)
         leaf_attributes.extend(inherited_attributes)
+
 
         er_event_type = EREventType(value=value,
                                     display=display,
@@ -180,10 +192,18 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                     properties[key]['enumNames'] = enum_display
         else:
             print('Failed to find attribute')
+    append_custom_attributes(properties=properties)
     schema = EventSchema(definition=schema_definition,
                          properties=properties,
                          type='object')
     return schema
+
+
+def append_custom_attributes(properties):
+    key = 'smart_observation_uuid'
+    properties[key] = dict(type='string',
+                           title='SMART Observation UUID')
+
 
 def er_event_type_schemas_equal(schema1: dict, schema2: dict):
     return schema1.get('properties') == schema2.get('properties') and schema1.get('definition') == schema2.get('definition')
@@ -207,6 +227,15 @@ def get_subjects_from_patrol_data_model(pm: PatrolDataModel, ca_uuid: str):
                                     is_active=True)
                 subjects.append(subject)
     return subjects
+
+
+def get_earth_ranger_last_poll(integration_id: str):
+    er_state = EarthRangerReaderState.parse_obj(cache.get_state(integration_id=integration_id))
+    return er_state
+
+
+def set_earth_ranger_last_poll(integration_id: str, state: EarthRangerReaderState):
+    cache.save_poll_time(state=state.json(), integration_id=integration_id)
 
 
 
