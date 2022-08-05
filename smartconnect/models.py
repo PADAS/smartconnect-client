@@ -28,6 +28,12 @@ class Geometry(BaseModel):
     coordinates: List[float] = Field(..., max_item=2, min_items=2)
 
 
+class File(BaseModel):
+    filename: str
+    data: str
+    signatureType: Optional[str]
+
+
 class SmartAttributes(BaseModel):
     observationGroups: Optional[List[SmartObservationGroup]]
     patrolUuid: Optional[str]
@@ -44,6 +50,7 @@ class SmartAttributes(BaseModel):
     number: Optional[int]
     members: Optional[List[str]]
     leader: Optional[str]
+    attachments: Optional[List[File]]
 
 
 class Properties(BaseModel):
