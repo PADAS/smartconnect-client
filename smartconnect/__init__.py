@@ -229,13 +229,13 @@ class SmartClient:
             timeout=DEFAULT_TIMEOUT)
         ca_datamodel.raw.decode_content = True
 
-        self.logger.debug(f'Download CA Data model took {ca_datamodel.elapsed.total_seconds()} seconds')
+        self.logger.debug(f'Download CA {ca_uuid} Data model took {ca_datamodel.elapsed.total_seconds()} seconds')
 
-        self.logger.info('Downloaded CA Datamodel. Status code is: %s', ca_datamodel.status_code)
+        self.logger.info(f'Downloaded CA {ca_uuid} Datamodel. Status code is: {ca_datamodel.status_code}')
 
         if not ca_datamodel.ok:
-            self.logger.error('Failed to download CA Datamodel. Status_code is: %s', ca_datamodel.status_code)
-            raise Exception('Failed to download Data Model.')
+            self.logger.error(f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}')
+            raise Exception('Failed to download Data Model')
 
 
         dm = DataModel()
