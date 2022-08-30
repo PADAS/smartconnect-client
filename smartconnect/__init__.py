@@ -207,7 +207,8 @@ class SmartClient:
                 ca_uuid=ca_uuid
             )
         except Exception as e:
-            raise SMARTClientException("Failed downloading SMART Datamodel") from e
+            logger.exception(e)
+            raise SMARTClientException(f"Failed downloading SMART Datamodel ") from e
 
         if ca_datamodel:
             cache.cache.set(
