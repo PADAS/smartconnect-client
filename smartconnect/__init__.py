@@ -161,7 +161,7 @@ class SmartClient:
             self.logger.exception(
                 f"Failed to get Conservation Areas", extra=dict(ca_uuid=ca_uuid)
             )
-            raise SMARTClientException(f"Failed to get SMART Conservation Areas")
+            raise SMARTClientException(f"Failed to get SMART Conservation Areas") from ex
 
     def get_conservation_areas(self) -> List[models.ConservationArea]:
         cas = requests.get(f'{self.api}/api/conservationarea',
@@ -207,7 +207,7 @@ class SmartClient:
                 ca_uuid=ca_uuid
             )
         except Exception as e:
-            raise SMARTClientException("Failed downloading SMART Datamodel")
+            raise SMARTClientException("Failed downloading SMART Datamodel") from e
 
         if ca_datamodel:
             cache.cache.set(
@@ -218,25 +218,29 @@ class SmartClient:
         return ca_datamodel
 
     def download_datamodel(self, *, ca_uuid: str = None):
+        extra_dict = dict(ca_uuid=ca_uuid,
+                          url=f'{self.api}/api/metadata/datamodel/{ca_uuid}')
 
         ca_datamodel = requests.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
-            auth=self.auth,
-            headers={
-                'accept': 'application/xml',
-            },
-            stream=True,
-            verify=self.verify_ssl,
-            timeout=DEFAULT_TIMEOUT)
+                                    auth=self.auth,
+                                    headers={
+                                        'accept': 'application/xml',
+                                    },
+                                    stream=True,
+                                    verify=self.verify_ssl,
+                                    timeout=DEFAULT_TIMEOUT)
         ca_datamodel.raw.decode_content = True
 
-        self.logger.debug(f'Download CA {ca_uuid} Data model took {ca_datamodel.elapsed.total_seconds()} seconds')
-
-        self.logger.info(f'Downloaded CA {ca_uuid} Datamodel. Status code is: {ca_datamodel.status_code}')
+        self.logger.info(f'Download CA {ca_uuid} data model took {ca_datamodel.elapsed.total_seconds()} seconds',
+                         extra=dict(**extra_dict,
+                                    status_code=ca_datamodel.status_code))
 
         if not ca_datamodel.ok:
-            self.logger.error(f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}')
+            self.logger.error(
+                f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}',
+                extra=dict(**extra_dict,
+                           status_code=ca_datamodel.status_code))
             raise Exception('Failed to download Data Model')
-
 
         dm = DataModel()
         dm.load(ca_datamodel.text)
@@ -351,7 +355,7 @@ class SmartClient:
             logger.error("SMART request Failed", extra=dict(ca_uuid=ca_uuid,
                                                             request=json,
                                                             response=response.content))
-            raise SMARTClientException
+            raise SMARTClientException("SMART request Failed")
 
     # Functions for quick testing
     def add_patrol_trackpoint(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
