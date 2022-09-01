@@ -16,7 +16,8 @@ smart_er_type_mapping = {'TEXT': 'string',
                          'NUMERIC': 'number',
                          'BOOLEAN': 'boolean',
                          'TREE': 'array',
-                         'LIST': 'array'}
+                         'LIST': 'array',
+                         'DATE': 'string'}
 
 
 class CategoryAttribute(BaseModel):
@@ -85,42 +86,46 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
     er_event_types = []
 
     for cat in cats:
-        leaf_attributes = cat.attributes
-        is_multiple = cat.is_multiple
-        is_active = cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path)
-        path_components = str.split(cat.path, sep='.')
-        value = '_'.join(path_components)
-        # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
-        value = f'{ca_uuid}_{value}'
-        display = f'{ca_identifier} - {cat.display}'
-        inherited_attributes = get_inherited_attributes(cats, path_components)
-        leaf_attributes.extend(inherited_attributes)
+        try:
+            leaf_attributes = cat.attributes
+            is_multiple = cat.is_multiple
+            is_active = cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path)
+            path_components = str.split(cat.path, sep='.')
+            value = '_'.join(path_components)
+            # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
+            value = f'{ca_uuid}_{value}'
+            display = f'{ca_identifier} - {cat.display}'
+            inherited_attributes = get_inherited_attributes(cats, path_components)
+            leaf_attributes.extend(inherited_attributes)
 
 
-        er_event_type = EREventType(value=value,
-                                    display=display,
-                                    is_active=is_active)
+            er_event_type = EREventType(value=value,
+                                        display=display,
+                                        is_active=is_active)
 
-        if is_active:
-            if not leaf_attributes:
-                logger.warning(f'Skipping event type, no leaf attributes detected', extra=dict(value=value,
-                                                                                               display=display))
-                # Dont create event_types for leaves with no attributes
-                continue
+            if is_active:
+                if not leaf_attributes:
+                    logger.warning(f'Skipping event type, no leaf attributes detected', extra=dict(value=value,
+                                                                                                   display=display))
+                    # Dont create event_types for leaves with no attributes
+                    continue
 
-            schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
-                                                      is_multiple=is_multiple)
+                schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
+                                                          is_multiple=is_multiple)
 
-            if not schema.properties:
-                logger.warning(f'Skipping event type, no schema properties detected',
-                               extra=dict(event_type=er_event_type))
-                # ER wont create event with no schema properties
-                continue
+                if not schema.properties:
+                    logger.warning(f'Skipping event type, no schema properties detected',
+                                   extra=dict(event_type=er_event_type))
+                    # ER wont create event with no schema properties
+                    continue
 
-            # ER API requires schema as a string
-            er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True))
+                # ER API requires schema as a string
+                er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True))
 
-        er_event_types.append(er_event_type)
+            er_event_types.append(er_event_type)
+        except Exception as e:
+            logger.error(f"Exception occured building ER event type from SMART category {cat}")
+            raise e
     return er_event_types
 
 
@@ -153,45 +158,48 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
     schema_definition = []
     attribute_meta: CategoryAttribute
     for attribute_meta in leaf_attributes:
-        key = attribute_meta.key
-        is_active = attribute_meta.is_active
-        attribute = next((x for x in attributes if x.key == key), None)
-        if attribute:
-            if not is_active:
-                # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
-                #  Excluding entirely form schema for now if not is_active until that ability is determined
-                continue
-            schema_definition.append(key)
-            # Right now we are not supporting multiple observation support
-            if is_multiple and False:
-                # create event type that allows multiple value entries
-                type = attribute.type
-                converted_type = smart_er_type_mapping[type]
-                display = attribute.display
-                properties[key] = dict(type=converted_type,
-                                       title=display)
-                options = attribute.options
-                if options:
-                    options = get_leaf_options(options)
-                    option_values = [dict(title=x.display, const=x.key) for x in options]
-                    properties[key]['items'] = dict(type='string',
-                                                    oneOf=option_values)
+        try:
+            key = attribute_meta.key
+            is_active = attribute_meta.is_active
+            attribute = next((x for x in attributes if x.key == key), None)
+            if attribute:
+                if not is_active:
+                    # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
+                    #  Excluding entirely form schema for now if not is_active until that ability is determined
+                    continue
+                schema_definition.append(key)
+                # Right now we are not supporting multiple observation support
+                if is_multiple and False:
+                    # create event type that allows multiple value entries
+                    type = attribute.type
+                    converted_type = smart_er_type_mapping[type]
+                    display = attribute.display
+                    properties[key] = dict(type=converted_type,
+                                           title=display)
+                    options = attribute.options
+                    if options:
+                        options = get_leaf_options(options)
+                        option_values = [dict(title=x.display, const=x.key) for x in options]
+                        properties[key]['items'] = dict(type='string',
+                                                        oneOf=option_values)
+                else:
+                    # create event type that allows single value entry
+                    display = attribute.display
+                    converted_type = smart_er_type_mapping[attribute.type]
+                    converted_type = converted_type if converted_type is not 'array' else 'string'
+                    properties[key] = dict(type=converted_type,
+                                           title=display)
+                    options = attribute.options
+                    if options:
+                        options = get_leaf_options(options)
+                        enum_values = [x.key for x in options]
+                        enum_display = [x.display for x in options]
+                        properties[key]['enum'] = enum_values
+                        properties[key]['enumNames'] = enum_display
             else:
-                # create event type that allows single value entry
-                display = attribute.display
-                converted_type = smart_er_type_mapping[attribute.type]
-                converted_type = converted_type if converted_type is not 'array' else 'string'
-                properties[key] = dict(type=converted_type,
-                                       title=display)
-                options = attribute.options
-                if options:
-                    options = get_leaf_options(options)
-                    enum_values = [x.key for x in options]
-                    enum_display = [x.display for x in options]
-                    properties[key]['enum'] = enum_values
-                    properties[key]['enumNames'] = enum_display
-        else:
-            print('Failed to find attribute')
+                print('Failed to find attribute')
+        except Exception as e:
+            logger.error(f"Error occurred while building schema for category attribute key {key}")
     append_custom_attributes(properties=properties)
     schema = EventSchema(definition=schema_definition,
                          properties=properties,
