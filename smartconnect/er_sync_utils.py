@@ -9,6 +9,7 @@ from cdip_connector.core.schemas import ERSubject
 from pydantic import BaseModel, parse_obj_as, Field
 
 from smartconnect import PatrolDataModel, cache
+from smartconnect.models import Category, Attribute, CategoryAttribute
 
 logger = logging.getLogger(__name__)
 
@@ -20,27 +21,27 @@ smart_er_type_mapping = {'TEXT': 'string',
                          'DATE': 'string'}
 
 
-class CategoryAttribute(BaseModel):
-    key: str
-    is_active: bool = Field(alias="isactive", default=True)
-
-class Category(BaseModel):
-    path: str
-    display: str
-    is_multiple: Optional[bool] = Field(alias="ismultiple", default=False)
-    is_active: Optional[bool] = Field(alias="isactive", default=True)
-    attributes: Optional[List[CategoryAttribute]]
-
-class AttributeOption(BaseModel):
-    key: str
-    display: str
-
-class Attribute(BaseModel):
-    key: str
-    type: str
-    isrequired: Optional[bool] = False
-    display: str
-    options: Optional[List[AttributeOption]]
+# class CategoryAttribute(BaseModel):
+#     key: str
+#     is_active: bool = Field(alias="isactive", default=True)
+#
+# class Category(BaseModel):
+#     path: str
+#     display: str
+#     is_multiple: Optional[bool] = Field(alias="ismultiple", default=False)
+#     is_active: Optional[bool] = Field(alias="isactive", default=True)
+#     attributes: Optional[List[CategoryAttribute]]
+#
+# class AttributeOption(BaseModel):
+#     key: str
+#     display: str
+#
+# class Attribute(BaseModel):
+#     key: str
+#     type: str
+#     isrequired: Optional[bool] = False
+#     display: str
+#     options: Optional[List[AttributeOption]]
 
 class EventSchema(BaseModel):
     type: str = 'object'
@@ -48,8 +49,10 @@ class EventSchema(BaseModel):
     properties: Optional[dict]
     definition: Optional[List]
 
+
 class SchemaWrapper(BaseModel):
     schema_wrapper: EventSchema = Field(alias="schema")
+
 
 class EREventType(BaseModel):
     id: Optional[UUID]
@@ -68,6 +71,7 @@ class EarthRangerReaderState(pydantic.BaseModel):
         days=7
     )
 
+
 def is_leaf_node(*, node_paths, cur_node):
     is_leaf = True
     for path in node_paths:
@@ -76,6 +80,61 @@ def is_leaf_node(*, node_paths, cur_node):
             is_leaf = False
             break
     return is_leaf
+
+# def build_earth_ranger_event_types_from_cdm(*, dm: dict, cdm: dict, ca_uuid: str, ca_identifier: str):
+#     """Builds Earth Ranger Event Types from SMART CA configurable data model with reference to data model"""
+#     cats = parse_obj_as(List[Category], cdm.get('categories'))
+#     cat_paths = [cat.path for cat in cats]
+#     attributes = parse_obj_as(List[Attribute], cdm.get('attributes'))
+#     er_event_types = []
+
+
+def build_earth_ranger_event_types_from_cdm(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
+    """Builds Earth Ranger Event Types from SMART CA configurable data model with reference to data model"""
+    cats = parse_obj_as(List[Category], cdm.get('categories'))
+    cat_paths = [cat.path for cat in cats]
+    attributes = parse_obj_as(List[Attribute], dm.get('attributes'))
+    er_event_types = []
+
+    for cat in cats:
+        try:
+            leaf_attributes = cat.attributes
+            is_multiple = cat.is_multiple
+            is_active = cat.is_active
+            path_components = str.split(cat.hkeyPath.rstrip('.'), sep='.')
+            value = '_'.join(path_components)
+            # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
+            value = f'{ca_uuid}_{value}'
+            display = f'{ca_identifier} - {cat.display}'
+
+            er_event_type = EREventType(value=value,
+                                        display=display,
+                                        is_active=is_active)
+
+            if is_active:
+                if not leaf_attributes:
+                    logger.warning(f'Skipping event type, no leaf attributes detected', extra=dict(value=value,
+                                                                                                   display=display))
+                    # Dont create event_types for leaves with no attributes
+                    continue
+
+                schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
+                                                          is_multiple=is_multiple, attributeConfigs=cdm.get('attributes'))
+
+                if not schema.properties:
+                    logger.warning(f'Skipping event type, no schema properties detected',
+                                   extra=dict(event_type=er_event_type))
+                    # ER wont create event with no schema properties
+                    continue
+
+                # ER API requires schema as a string
+                er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True))
+
+            er_event_types.append(er_event_type)
+        except Exception as e:
+            logger.error(f"Exception occured building ER event type from SMART category {cat}")
+            raise e
+    return er_event_types
 
 
 def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str):
@@ -144,16 +203,24 @@ def get_inherited_attributes(cats: List[Category], path_components: list):
             inherited_attributes.extend(parent_attributes)
     return inherited_attributes
 
-def get_leaf_options(options):
+
+def get_leaf_options(options, optionsConfig = None):
     leaf_options = []
     option_keys = [option.key for option in options]
+    isActive = True
     for option in options:
-        if is_leaf_node(node_paths=option_keys, cur_node=option.key):
+        if optionsConfig:
+            optionConfig = next((config for config in optionsConfig if config.get('key') == option.key), None)
+            if optionConfig:
+                isActive = optionConfig.get('isActive') == 'true'
+            else:
+                logger.warn(f"No option config found for option {option.key}")
+        if isActive and is_leaf_node(node_paths=option_keys, cur_node=option.key):
             leaf_options.append(option)
     return leaf_options
 
 
-def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attributes: List[CategoryAttribute], is_multiple: bool):
+def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attributes: List[CategoryAttribute], is_multiple: bool, attributeConfigs = None):
     properties = {}
     schema_definition = []
     attribute_meta: CategoryAttribute
@@ -178,7 +245,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                                            title=display)
                     options = attribute.options
                     if options:
-                        options = get_leaf_options(options)
+                        options = get_leaf_options(options, attributeConfigs=attributeConfigs)
                         option_values = [dict(title=x.display, const=x.key) for x in options]
                         properties[key]['items'] = dict(type='string',
                                                         oneOf=option_values)
@@ -190,8 +257,9 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                     properties[key] = dict(type=converted_type,
                                            title=display)
                     options = attribute.options
+                    optionsConfig = next((config['options'] for config in attributeConfigs if config['key'] == key), None)
                     if options:
-                        options = get_leaf_options(options)
+                        options = get_leaf_options(options, optionsConfig=optionsConfig)
                         enum_values = [x.key for x in options]
                         enum_display = [x.display for x in options]
                         properties[key]['enum'] = enum_values
@@ -200,7 +268,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                 print('Failed to find attribute')
         except Exception as e:
             logger.error(f"Error occurred while building schema for category attribute key {key}")
-    append_custom_attributes(properties=properties)
+    # append_custom_attributes(properties=properties)
     schema = EventSchema(definition=schema_definition,
                          properties=properties,
                          type='object')
@@ -208,6 +276,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
 
 
 def append_custom_attributes(properties):
+    """ Was using this to append custom attributes like SMART Observation UUID """
     key = 'smart_observation_uuid'
     properties[key] = dict(type='string',
                            title='SMART Observation UUID')

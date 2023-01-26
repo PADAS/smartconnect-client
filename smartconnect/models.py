@@ -4,9 +4,34 @@ from datetime import datetime, date
 from typing import List, Any, Optional, Union
 
 import untangle
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, parse_obj_as
 
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
+
+
+class CategoryAttribute(BaseModel):
+    key: str
+    is_active: bool = Field(alias="isactive", default=True)
+
+class Category(BaseModel):
+    path: str
+    hkeyPath: str
+    display: str
+    is_multiple: Optional[bool] = Field(alias="ismultiple", default=False)
+    is_active: Optional[bool] = Field(alias="isactive", default=True)
+    attributes: Optional[List[CategoryAttribute]]
+
+
+class AttributeOption(BaseModel):
+    key: str
+    display: str
+
+class Attribute(BaseModel):
+    key: str
+    type: str
+    isrequired: Optional[bool] = False
+    display: str
+    options: Optional[List[AttributeOption]]
 
 
 class TransformationRule(BaseModel):
@@ -174,6 +199,8 @@ class DataModel:
         self.use_language_code = use_language_code
 
     def load(self, datamodel_text):
+        # with open('chunga-datamodel-response.xml', 'w') as fo:
+        #     fo.write(datamodel_text)
         self.datamodel = untangle.parse(datamodel_text)
 
         self._categories = list(self.generate_category_paths(self.datamodel.DataModel.categories))
@@ -290,6 +317,134 @@ class DataModel:
                     'type': attribute['type'],
                     'isrequired': attribute['isrequired'] == 'true',
                     'display': self.resolve_display(attribute.names, language_code=self.use_language_code),
+                    'options': options
+                }
+
+    def resolve_display(self, items, language_code='en'):
+        for item in items:
+            if item['language_code'] == language_code:
+                return item['value']
+        else:
+            return 'n/a'
+
+
+class ConfigurableDataModel:
+
+    def __init__(self, use_language_code='en'):
+        self.use_language_code = use_language_code
+
+    def load(self, config_datamodel_text):
+        # with open('config-datamodel-response.xml', 'w') as fo:
+        #     fo.write(config_datamodel_text)
+
+        self.config_datamodel = untangle.parse(config_datamodel_text)
+
+        self._categories = list(self.generate_node_paths(self.config_datamodel.ConfigurableModel.nodes))
+        self._attributes = list(self.generate_attributes(self.config_datamodel.ConfigurableModel))
+        pass
+
+    # def save(self, filename='_si-datamodel.json'):
+    #     with open('_si-datamodel.json', 'w') as fo:
+    #         json.dump({
+    #             'categories': self._categories,
+    #             'attributes': self._attributes,
+    #         }, fo, indent=2)
+    #
+    def export_as_dict(self):
+        return {
+                'categories': self._categories,
+                'attributes': self._attributes,
+            }
+    #
+    # def import_from_dict(self, data:dict):
+    #     self._categories = data.get('categories')
+    #     self._attributes = data.get('attributes')
+    #
+    # def get_category(self, *, path: str = None) -> dict:
+    #     for cat in self._categories:
+    #         if cat['path'] == path:
+    #             return cat
+    #
+    # def get_attribute(self, *, key:str = None) -> dict:
+    #     for att in self._attributes:
+    #         if att['key'] == key:
+    #             return att
+
+    def generate_category_attributes(self, root):
+        if hasattr(root, 'attribute'):
+            for attribute in root.attribute:
+                yield {
+                    'key': attribute['attributeKey'],
+                    'isactive': next(option["doubleValue"] for option in attribute.option if option["id"] == 'IS_VISIBLE') == '1.0'
+                }
+
+    def get_list_options(self, attribute):
+        if hasattr(attribute, 'children'):
+            yield from [{
+                'key': child['keyRef'],
+                'isActive': child['isActive']
+            } for child in attribute.children]
+    #
+    # def get_tree_options(self, attribute):
+    #     if hasattr(attribute, 'tree'):
+    #
+    #         for tree_value in attribute.tree:
+    #             val = {
+    #                 'key': tree_value['key'],
+    #                 'display': self.resolve_display(tree_value.names, language_code=self.use_language_code)
+    #             }
+    #             yield val
+    #             yield from self.generate_tree_children(tree_value, prefix=val['key'])
+    #
+    # def generate_tree_children(self, branch, prefix=''):
+    #     if hasattr(branch, 'children'):
+    #         for elem in branch.children:
+    #
+    #             if elem._name == 'children':
+    #                 child = elem
+    #
+    #                 this_key = '.'.join([prefix, child['key']])
+    #                 val = {
+    #                     'key': this_key,
+    #                     'display': self.resolve_display(child.names, language_code=self.use_language_code),
+    #                 }
+    #                 yield val
+    #                 yield from self.generate_tree_children(child, prefix=this_key)
+
+
+    def generate_node_paths(self, root, prefix=None):
+        '''
+
+        '''
+        if hasattr(root, 'node'):
+            for subcat in root.node:
+                if prefix:
+                    if subcat['categoryKey']:
+                        yield {
+                            'path': f'{prefix}.{subcat["categoryKey"]}',
+                            'hkeyPath': subcat['categoryHkey'],
+                            'attributes': list(self.generate_category_attributes(subcat)),
+                            'display': self.resolve_display(subcat.name, language_code=self.use_language_code)
+                        }
+                    new_prefix = f'{prefix}.{subcat["key"]}'
+                else:
+                    if subcat['categoryKey']:
+                        yield {
+                            'path': subcat['categoryKey'],
+                            'hkeyPath': subcat['categoryHkey'],
+                            'attributes': list(self.generate_category_attributes(subcat)),
+                            'display': self.resolve_display(subcat.name, language_code=self.use_language_code)
+                        }
+                    new_prefix = subcat['categoryKey']
+                yield from self.generate_node_paths(subcat, prefix=new_prefix)
+
+    def generate_attributes(self, root):
+        if hasattr(root, 'attributeConfig'):
+            for attribute in root.attributeConfig:
+                options = list(self.get_list_options(attribute))
+
+                yield {
+                    'key': attribute['attributeKey'],
                     'options': options
                 }
 
