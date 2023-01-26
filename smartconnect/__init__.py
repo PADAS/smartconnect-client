@@ -14,7 +14,8 @@ from smartconnect import models, cache, smart_settings
 
 logger = logging.getLogger(__name__)
 
-from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataModel, DataModel, ConservationArea
+from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataModel, DataModel, ConservationArea, \
+    ConfigurableDataModel
 
 # Manually bump this.
 __version__ = '1.0.3'
@@ -115,6 +116,25 @@ class SmartClient:
         self.logger = logging.getLogger(SmartClient.__name__)
         self.verify_ssl = smart_settings.SMART_SSL_VERIFY
 
+    def get_server_version(self):
+        cas = requests.get(f'{self.api}/api/info',
+                           auth=self.auth,
+                           headers={
+                               'accept': 'application/json',
+                           },
+                           verify=self.verify_ssl,
+                           timeout=DEFAULT_TIMEOUT
+                           )
+
+        if cas.ok:
+            cas = cas.json()
+            info=dict(build_date=cas.get('build-date'),
+                      db_version=cas.get('build-version'),
+                      db_last_updated=cas.get('db-last-updated'),
+                      file_store_version=cas.get('file-store-version'),
+                      build_version=cas.get('build-version'))
+            print(info)
+
     def get_conservation_area(self, *, ca_uuid: str = None, use_cache: bool = True):
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
         if use_cache:
@@ -178,6 +198,80 @@ class SmartClient:
 
         return [models.ConservationArea.parse_obj(ca) for ca in cas]
 
+    def get_configurable_datamodel_for_ca(self, *, ca_uuid: str):
+        extra_dict = dict(ca_uuid=ca_uuid,
+                          url=f'{self.api}/metadata/configurablemodel')
+
+        config_datamodels = requests.get(f'{self.api}/api/metadata/configurablemodel',
+                                        auth=self.auth,
+                                        params={"ca_uuid": ca_uuid},
+                                        headers={
+                                            'accept': 'application/json',
+                                        },
+                                        stream=True,
+                                        verify=self.verify_ssl,
+                                        timeout=DEFAULT_TIMEOUT)
+
+        config_datamodels.raw.decode_content = True
+
+        self.logger.info(f'Get configurable data models for CA {ca_uuid} data model took {config_datamodels.elapsed.total_seconds()} seconds',
+                         extra=dict(**extra_dict,
+                                    status_code=config_datamodels.status_code))
+
+        if not config_datamodels.ok:
+            self.logger.error(
+                f'Failed to download configurable datamodels for  CA {ca_uuid}. Status_code is: {config_datamodels.status_code}',
+                extra=dict(**extra_dict,
+                           status_code=config_datamodels.status_code))
+            raise Exception('Failed to download Configurable Data Models')
+
+        cdms = config_datamodels.json()
+        er_cdm = next((x for x in cdms if x.get('name') == 'James Test Model'), None)
+        if er_cdm:
+            return er_cdm.get('uuid')
+        else:
+            return None
+
+    def download_configurable_datamodel(self, *, cm_uuid: str = None):
+        extra_dict = dict(cm_uuid=cm_uuid,
+                          url=f'{self.api}/api/metadata/configurablemodel/{cm_uuid}')
+
+        # config_datamodel = open('chunga-config-datamodel-response.xml', 'r')
+
+        config_datamodel = requests.get(f'{self.api}/api/metadata/configurablemodel/{cm_uuid}',
+                                    auth=self.auth,
+                                    headers={
+                                        'accept': 'application/xml',
+                                    },
+                                    stream=True,
+                                    verify=self.verify_ssl,
+                                    timeout=DEFAULT_TIMEOUT)
+        config_datamodel.raw.decode_content = True
+
+        self.logger.info(f'Download configurable model {cm_uuid} data model took {config_datamodel.elapsed.total_seconds()} seconds',
+                         extra=dict(**extra_dict,
+                                    status_code=config_datamodel.status_code))
+
+        if not config_datamodel.ok:
+            self.logger.error(
+                f'Failed to download data model for  configurable model {cm_uuid}. Status_code is: {config_datamodel.status_code}',
+                extra=dict(**extra_dict,
+                           status_code=config_datamodel.status_code))
+            raise Exception('Failed to download Data Model')
+
+        cdm = ConfigurableDataModel()
+        # cdm.load(config_datamodel)
+        cdm.load(config_datamodel.text)
+        return cdm
+
+    def get_configurable_data_model(self, *, cm_uuid: str = None, use_cache: bool = True):
+        # TODO: version consideration
+        # TODO: Implement caching
+        ca_config_datamodel = self.download_configurable_datamodel(
+            cm_uuid=cm_uuid
+        )
+        return ca_config_datamodel
+
     def get_data_model(self, *, ca_uuid: str = None, use_cache: bool = True):
         # CA Data Model is not available for versions below 7. Use a blank.
         if self.version.startswith("6"):
@@ -208,9 +302,9 @@ class SmartClient:
             )
         except Exception as e:
             logger.exception(e)
-            raise SMARTClientException(f"Failed downloading SMART Datamodel ") from e
+            raise SMARTClientException(f"Failed downloading SMART Datamodel for CA {ca_uuid}") from e
 
-        if ca_datamodel:
+        if ca_datamodel and use_cache:
             cache.cache.set(
                 name=cache_key,
                 value=json.dumps(ca_datamodel.export_as_dict()),
@@ -222,29 +316,31 @@ class SmartClient:
         extra_dict = dict(ca_uuid=ca_uuid,
                           url=f'{self.api}/api/metadata/datamodel/{ca_uuid}')
 
-        ca_datamodel = requests.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
-                                    auth=self.auth,
-                                    headers={
-                                        'accept': 'application/xml',
-                                    },
-                                    stream=True,
-                                    verify=self.verify_ssl,
-                                    timeout=DEFAULT_TIMEOUT)
-        ca_datamodel.raw.decode_content = True
-
-        self.logger.info(f'Download CA {ca_uuid} data model took {ca_datamodel.elapsed.total_seconds()} seconds',
-                         extra=dict(**extra_dict,
-                                    status_code=ca_datamodel.status_code))
-
-        if not ca_datamodel.ok:
-            self.logger.error(
-                f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}',
-                extra=dict(**extra_dict,
-                           status_code=ca_datamodel.status_code))
-            raise Exception('Failed to download Data Model')
+        ca_datamodel = open('/Users/jamesgoodheart/Documents/GitHub/smartconnect-client/tests/chunga-datamodel-response.xml', 'r')
+        # ca_datamodel = requests.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
+        #                             auth=self.auth,
+        #                             headers={
+        #                                 'accept': 'application/xml',
+        #                             },
+        #                             stream=True,
+        #                             verify=self.verify_ssl,
+        #                             timeout=DEFAULT_TIMEOUT)
+        # ca_datamodel.raw.decode_content = True
+        #
+        # self.logger.info(f'Download CA {ca_uuid} data model took {ca_datamodel.elapsed.total_seconds()} seconds',
+        #                  extra=dict(**extra_dict,
+        #                             status_code=ca_datamodel.status_code))
+        #
+        # if not ca_datamodel.ok:
+        #     self.logger.error(
+        #         f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}',
+        #         extra=dict(**extra_dict,
+        #                    status_code=ca_datamodel.status_code))
+        #     raise Exception('Failed to download Data Model')
 
         dm = DataModel()
-        dm.load(ca_datamodel.text)
+        dm.load(ca_datamodel)
+        # dm.load(ca_datamodel.text)
         return dm
 
     def download_patrolmodel(self, *, ca_uuid: str = None):
