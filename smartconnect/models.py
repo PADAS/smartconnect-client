@@ -25,6 +25,7 @@ class Category(BaseModel):
 class AttributeOption(BaseModel):
     key: str
     display: str
+    is_active: Optional[bool] = Field(alias="isActive", default=True)
 
 class Attribute(BaseModel):
     key: str
@@ -245,6 +246,7 @@ class DataModel:
         if hasattr(attribute, 'values'):
             yield from [{
                 'key': value['key'],
+                'isActive': value['isactive'] == 'true',
                 'display': self.resolve_display(value.names, language_code=self.use_language_code)
             } for value in attribute.values]
 
@@ -343,34 +345,14 @@ class ConfigurableDataModel:
         self._attributes = list(self.generate_attributes(self.config_datamodel.ConfigurableModel))
         pass
 
-    # def save(self, filename='_si-datamodel.json'):
-    #     with open('_si-datamodel.json', 'w') as fo:
-    #         json.dump({
-    #             'categories': self._categories,
-    #             'attributes': self._attributes,
-    #         }, fo, indent=2)
-    #
     def export_as_dict(self):
         return {
                 'categories': self._categories,
                 'attributes': self._attributes,
             }
-    #
-    # def import_from_dict(self, data:dict):
-    #     self._categories = data.get('categories')
-    #     self._attributes = data.get('attributes')
-    #
-    # def get_category(self, *, path: str = None) -> dict:
-    #     for cat in self._categories:
-    #         if cat['path'] == path:
-    #             return cat
-    #
-    # def get_attribute(self, *, key:str = None) -> dict:
-    #     for att in self._attributes:
-    #         if att['key'] == key:
-    #             return att
 
-    def generate_category_attributes(self, root):
+    @staticmethod
+    def generate_category_attributes(root):
         if hasattr(root, 'attribute'):
             for attribute in root.attribute:
                 yield {
@@ -382,40 +364,10 @@ class ConfigurableDataModel:
         if hasattr(attribute, 'children'):
             yield from [{
                 'key': child['keyRef'],
-                'isActive': child['isActive']
+                'isActive': child['isActive'] == 'true'
             } for child in attribute.children]
-    #
-    # def get_tree_options(self, attribute):
-    #     if hasattr(attribute, 'tree'):
-    #
-    #         for tree_value in attribute.tree:
-    #             val = {
-    #                 'key': tree_value['key'],
-    #                 'display': self.resolve_display(tree_value.names, language_code=self.use_language_code)
-    #             }
-    #             yield val
-    #             yield from self.generate_tree_children(tree_value, prefix=val['key'])
-    #
-    # def generate_tree_children(self, branch, prefix=''):
-    #     if hasattr(branch, 'children'):
-    #         for elem in branch.children:
-    #
-    #             if elem._name == 'children':
-    #                 child = elem
-    #
-    #                 this_key = '.'.join([prefix, child['key']])
-    #                 val = {
-    #                     'key': this_key,
-    #                     'display': self.resolve_display(child.names, language_code=self.use_language_code),
-    #                 }
-    #                 yield val
-    #                 yield from self.generate_tree_children(child, prefix=this_key)
-
 
     def generate_node_paths(self, root, prefix=None):
-        '''
-
-        '''
         if hasattr(root, 'node'):
             for subcat in root.node:
                 if prefix:
@@ -448,7 +400,8 @@ class ConfigurableDataModel:
                     'options': options
                 }
 
-    def resolve_display(self, items, language_code='en'):
+    @staticmethod
+    def resolve_display(items, language_code='en'):
         for item in items:
             if item['language_code'] == language_code:
                 return item['value']
