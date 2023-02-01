@@ -204,19 +204,25 @@ def get_inherited_attributes(cats: List[Category], path_components: list):
     return inherited_attributes
 
 
-def get_leaf_options(options, optionsConfig = None):
+def get_leaf_options(options):
     leaf_options = []
     option_keys = [option.key for option in options]
-    isActive = True
     for option in options:
-        if optionsConfig:
-            optionConfig = next((config for config in optionsConfig if config.get('key') == option.key), None)
-            if optionConfig:
-                isActive = optionConfig.get('isActive') == 'true'
-            else:
-                logger.warn(f"No option config found for option {option.key}")
-        if isActive and is_leaf_node(node_paths=option_keys, cur_node=option.key):
+        if is_leaf_node(node_paths=option_keys, cur_node=option.key):
             leaf_options.append(option)
+    return leaf_options
+
+
+def get_leaf_options_with_config(options, optionsConfig = None):
+    leaf_options = []
+    for optionConfig in optionsConfig:
+        if optionConfig.get('key') is not None:
+            isActive = optionConfig.get('isActive')
+            option = next((option for option in options if optionConfig.get('key') == option.key), None)
+            if not option:
+                logger.warning(f"No option found for config {optionConfig.get('key')}")
+            if isActive and option:
+                leaf_options.append(option)
     return leaf_options
 
 
@@ -229,6 +235,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
             key = attribute_meta.key
             is_active = attribute_meta.is_active
             attribute = next((x for x in attributes if x.key == key), None)
+            attributeOptionsConfig = next((config['options'] for config in attributeConfigs if config['key'] == key), None)
             if attribute:
                 if not is_active:
                     # TODO: Find out from ER core why exclusion from schema definition not hiding field in report
@@ -245,7 +252,10 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                                            title=display)
                     options = attribute.options
                     if options:
-                        options = get_leaf_options(options, attributeConfigs=attributeConfigs)
+                        if attributeOptionsConfig:
+                            options = get_leaf_options_with_config(options, optionsConfig=attributeOptionsConfig)
+                        else:
+                            options = get_leaf_options(options)
                         option_values = [dict(title=x.display, const=x.key) for x in options]
                         properties[key]['items'] = dict(type='string',
                                                         oneOf=option_values)
@@ -257,9 +267,11 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                     properties[key] = dict(type=converted_type,
                                            title=display)
                     options = attribute.options
-                    optionsConfig = next((config['options'] for config in attributeConfigs if config['key'] == key), None)
                     if options:
-                        options = get_leaf_options(options, optionsConfig=optionsConfig)
+                        if attributeOptionsConfig:
+                            options = get_leaf_options_with_config(options, optionsConfig=attributeOptionsConfig)
+                        else:
+                            options = get_leaf_options(options)
                         enum_values = [x.key for x in options]
                         enum_display = [x.display for x in options]
                         properties[key]['enum'] = enum_values
