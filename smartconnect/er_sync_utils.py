@@ -81,81 +81,29 @@ def is_leaf_node(*, node_paths, cur_node):
             break
     return is_leaf
 
-# def build_earth_ranger_event_types_from_cdm(*, dm: dict, cdm: dict, ca_uuid: str, ca_identifier: str):
-#     """Builds Earth Ranger Event Types from SMART CA configurable data model with reference to data model"""
-#     cats = parse_obj_as(List[Category], cdm.get('categories'))
-#     cat_paths = [cat.path for cat in cats]
-#     attributes = parse_obj_as(List[Attribute], cdm.get('attributes'))
-#     er_event_types = []
 
-
-def build_earth_ranger_event_types_from_cdm(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
-    """Builds Earth Ranger Event Types from SMART CA configurable data model with reference to data model"""
-    cats = parse_obj_as(List[Category], cdm.get('categories'))
+def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
+    """Builds Earth Ranger Event Types from SMART CA data model or configurable data model if provided"""
+    cats = parse_obj_as(List[Category], cdm.get('categories')) if cdm else parse_obj_as(List[Category], dm.get('categories'))
     cat_paths = [cat.path for cat in cats]
     attributes = parse_obj_as(List[Attribute], dm.get('attributes'))
+    attributeConfigs = cdm.get('attributes') if cdm else None
     er_event_types = []
 
     for cat in cats:
         try:
             leaf_attributes = cat.attributes
             is_multiple = cat.is_multiple
-            is_active = cat.is_active
-            path_components = str.split(cat.hkeyPath.rstrip('.'), sep='.')
+            is_active = cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path) if not cdm else True
+            path_components = str.split(cat.hkeyPath, sep='.') if cdm else str.split(cat.path, sep='.')
             value = '_'.join(path_components)
             # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
             value = f'{ca_uuid}_{value}'
             display = f'{ca_identifier} - {cat.display}'
-
-            er_event_type = EREventType(value=value,
-                                        display=display,
-                                        is_active=is_active)
-
-            if is_active:
-                if not leaf_attributes:
-                    logger.warning(f'Skipping event type, no leaf attributes detected', extra=dict(value=value,
-                                                                                                   display=display))
-                    # Dont create event_types for leaves with no attributes
-                    continue
-
-                schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
-                                                          is_multiple=is_multiple, attributeConfigs=cdm.get('attributes'))
-
-                if not schema.properties:
-                    logger.warning(f'Skipping event type, no schema properties detected',
-                                   extra=dict(event_type=er_event_type))
-                    # ER wont create event with no schema properties
-                    continue
-
-                # ER API requires schema as a string
-                er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True))
-
-            er_event_types.append(er_event_type)
-        except Exception as e:
-            logger.error(f"Exception occured building ER event type from SMART category {cat}")
-            raise e
-    return er_event_types
-
-
-def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str):
-    """Builds Earth Ranger Event Types from SMART CA data model"""
-    cats = parse_obj_as(List[Category], dm.get('categories'))
-    cat_paths = [cat.path for cat in cats]
-    attributes = parse_obj_as(List[Attribute], dm.get('attributes'))
-    er_event_types = []
-
-    for cat in cats:
-        try:
-            leaf_attributes = cat.attributes
-            is_multiple = cat.is_multiple
-            is_active = cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path)
-            path_components = str.split(cat.path, sep='.')
-            value = '_'.join(path_components)
-            # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
-            value = f'{ca_uuid}_{value}'
-            display = f'{ca_identifier} - {cat.display}'
-            inherited_attributes = get_inherited_attributes(cats, path_components)
-            leaf_attributes.extend(inherited_attributes)
+            if not cdm:
+                # Add inherited attributes for regular DataModel Flow
+                inherited_attributes = get_inherited_attributes(cats, path_components)
+                leaf_attributes.extend(inherited_attributes)
 
 
             er_event_type = EREventType(value=value,
@@ -170,7 +118,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
                     continue
 
                 schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
-                                                          is_multiple=is_multiple)
+                                                          is_multiple=is_multiple, attributeConfigs=attributeConfigs)
 
                 if not schema.properties:
                     logger.warning(f'Skipping event type, no schema properties detected',
@@ -235,7 +183,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
             key = attribute_meta.key
             is_active = attribute_meta.is_active
             attribute = next((x for x in attributes if x.key == key), None)
-            attributeOptionsConfig = next((config['options'] for config in attributeConfigs if config['key'] == key), None)
+            attributeOptionsConfig = next((config['options'] for config in attributeConfigs if config['key'] == key), None) if attributeConfigs else None
             if attribute:
                 if not is_active:
                     # TODO: Find out from ER core why exclusion from schema definition not hiding field in report

@@ -374,7 +374,7 @@ class ConfigurableDataModel:
                     if subcat['categoryKey']:
                         yield {
                             'path': f'{prefix}.{subcat["categoryKey"]}',
-                            'hkeyPath': subcat['categoryHkey'],
+                            'hkeyPath': subcat['categoryHkey'].rstrip('.'),
                             'attributes': list(self.generate_category_attributes(subcat)),
                             'display': self.resolve_display(subcat.name, language_code=self.use_language_code)
                         }
@@ -383,7 +383,7 @@ class ConfigurableDataModel:
                     if subcat['categoryKey']:
                         yield {
                             'path': subcat['categoryKey'],
-                            'hkeyPath': subcat['categoryHkey'],
+                            'hkeyPath': subcat['categoryHkey'].rstrip('.'),
                             'attributes': list(self.generate_category_attributes(subcat)),
                             'display': self.resolve_display(subcat.name, language_code=self.use_language_code)
                         }
