@@ -20,29 +20,6 @@ smart_er_type_mapping = {'TEXT': 'string',
                          'LIST': 'array',
                          'DATE': 'string'}
 
-
-# class CategoryAttribute(BaseModel):
-#     key: str
-#     is_active: bool = Field(alias="isactive", default=True)
-#
-# class Category(BaseModel):
-#     path: str
-#     display: str
-#     is_multiple: Optional[bool] = Field(alias="ismultiple", default=False)
-#     is_active: Optional[bool] = Field(alias="isactive", default=True)
-#     attributes: Optional[List[CategoryAttribute]]
-#
-# class AttributeOption(BaseModel):
-#     key: str
-#     display: str
-#
-# class Attribute(BaseModel):
-#     key: str
-#     type: str
-#     isrequired: Optional[bool] = False
-#     display: str
-#     options: Optional[List[AttributeOption]]
-
 class EventSchema(BaseModel):
     type: str = 'object'
     json_schema: str = Field(alias="$schema", default='http://json-schema.org/draft-04/schema#')
