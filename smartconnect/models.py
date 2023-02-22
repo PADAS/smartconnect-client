@@ -351,6 +351,16 @@ class ConfigurableDataModel:
                 'attributes': self._attributes,
             }
 
+    def get_category(self, *, path: str = None) -> dict:
+        for cat in self._categories:
+            if cat['hkeyPath'] == path:
+                return cat
+
+    def get_attribute(self, *, key:str = None) -> dict:
+        for att in self._attributes:
+            if att['key'] == key:
+                return att
+
     @staticmethod
     def generate_category_attributes(root):
         if hasattr(root, 'attribute'):
