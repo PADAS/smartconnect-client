@@ -316,31 +316,31 @@ class SmartClient:
         extra_dict = dict(ca_uuid=ca_uuid,
                           url=f'{self.api}/api/metadata/datamodel/{ca_uuid}')
 
-        ca_datamodel = open('/Users/jamesgoodheart/Documents/GitHub/smartconnect-client/tests/chunga-datamodel-response.xml', 'r')
-        # ca_datamodel = requests.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
-        #                             auth=self.auth,
-        #                             headers={
-        #                                 'accept': 'application/xml',
-        #                             },
-        #                             stream=True,
-        #                             verify=self.verify_ssl,
-        #                             timeout=DEFAULT_TIMEOUT)
-        # ca_datamodel.raw.decode_content = True
-        #
-        # self.logger.info(f'Download CA {ca_uuid} data model took {ca_datamodel.elapsed.total_seconds()} seconds',
-        #                  extra=dict(**extra_dict,
-        #                             status_code=ca_datamodel.status_code))
-        #
-        # if not ca_datamodel.ok:
-        #     self.logger.error(
-        #         f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}',
-        #         extra=dict(**extra_dict,
-        #                    status_code=ca_datamodel.status_code))
-        #     raise Exception('Failed to download Data Model')
+        # ca_datamodel = open('/Users/jamesgoodheart/Documents/GitHub/smartconnect-client/tests/chunga-datamodel-response.xml', 'r')
+        ca_datamodel = requests.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
+                                    auth=self.auth,
+                                    headers={
+                                        'accept': 'application/xml',
+                                    },
+                                    stream=True,
+                                    verify=self.verify_ssl,
+                                    timeout=DEFAULT_TIMEOUT)
+        ca_datamodel.raw.decode_content = True
+
+        self.logger.info(f'Download CA {ca_uuid} data model took {ca_datamodel.elapsed.total_seconds()} seconds',
+                         extra=dict(**extra_dict,
+                                    status_code=ca_datamodel.status_code))
+
+        if not ca_datamodel.ok:
+            self.logger.error(
+                f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}',
+                extra=dict(**extra_dict,
+                           status_code=ca_datamodel.status_code))
+            raise Exception('Failed to download Data Model')
 
         dm = DataModel()
-        dm.load(ca_datamodel)
-        # dm.load(ca_datamodel.text)
+        # dm.load(ca_datamodel)
+        dm.load(ca_datamodel.text)
         return dm
 
     def download_patrolmodel(self, *, ca_uuid: str = None):
