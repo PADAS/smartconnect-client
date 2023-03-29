@@ -15,7 +15,7 @@ class CategoryAttribute(BaseModel):
 
 class Category(BaseModel):
     path: str
-    hkeyPath: str
+    hkeyPath: Optional[str]
     display: str
     is_multiple: Optional[bool] = Field(alias="ismultiple", default=False)
     is_active: Optional[bool] = Field(alias="isactive", default=True)
