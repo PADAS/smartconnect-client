@@ -4,7 +4,7 @@ from datetime import datetime, date
 from typing import List, Any, Optional, Union
 
 import untangle
-from pydantic import BaseModel, Field, parse_obj_as
+from pydantic import BaseModel, Field, parse_obj_as, validator
 
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
@@ -44,6 +44,14 @@ class SmartObservation(BaseModel):
     observationUuid: Optional[str]
     category: str
     attributes: dict
+
+    validator("observationUuid")
+    def clean_observationUuid(cls, val):
+        
+	# TODO: Redress to make observationUuid a UUID field.
+        if val == 'None':
+            return None
+        return val
 
 
 class SmartObservationGroup(BaseModel):
