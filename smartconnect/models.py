@@ -277,9 +277,15 @@ class DataModel:
                     child = elem
 
                     this_key = '.'.join([prefix, child['key']])
+
+                    if hasattr(child, 'names'):
+                        display = self.resolve_display(child.names, language_code=self.use_language_code)
+                    else:
+                        display = this_key
+
                     val = {
                         'key': this_key,
-                        'display': self.resolve_display(child.names, language_code=self.use_language_code),
+                        'display': display,
                     }
                     yield val
                     yield from self.generate_tree_children(child, prefix=this_key)
