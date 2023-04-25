@@ -343,6 +343,14 @@ class SmartClient:
         dm.load(ca_datamodel.text)
         return dm
 
+    def load_datamodel(self, *, filename=None):
+        with open(filename, 'r') as fi:
+            contents = fi.read()
+
+            dm = DataModel(use_language_code=self.use_language_code)
+            dm.load(contents)
+            return dm
+        
     def download_patrolmodel(self, *, ca_uuid: str = None):
 
         ca_patrolmodel = requests.get(f'{self.api}/api/metadata/patrol/{ca_uuid}',

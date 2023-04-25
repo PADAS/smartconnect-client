@@ -104,7 +104,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
                     continue
 
                 # ER API requires schema as a string
-                er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True))
+                er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True), indent=2)
 
             er_event_types.append(er_event_type)
         except Exception as e:
@@ -224,6 +224,7 @@ def er_event_type_schemas_equal(schema1: dict, schema2: dict):
 
 
 def er_subjects_equal(subject1: ERSubject, subject2: ERSubject):
+    #Todo: revisit this, to see whether IDs are appropriate. Or add a side-data identifier for the subjects added by this routine.
     return subject1.name == subject2.name
 
 
