@@ -194,6 +194,13 @@ class ConservationArea(BaseModel):
     administrativeAreasJson: Optional[Any]
     uuid: uuid.UUID
 
+class SmartConnectApiInfo(BaseModel):
+    build_date: str = Field(None, alias='build-date')
+    build_version: str = Field(None, alias='build-version')
+    db_last_updated: str = Field(None, alias='db-last-updated')
+    file_store_version: str = Field(None, alias='file-store-version')
+    db_version: str = Field(None, alias='db-version')
+
 
 class SMARTCompositeRequest(BaseModel):
     ca_uuid: str
@@ -208,8 +215,6 @@ class DataModel:
         self.use_language_code = use_language_code
 
     def load(self, datamodel_text):
-        # with open('chunga-datamodel-response.xml', 'w') as fo:
-        #     fo.write(datamodel_text)
         self.datamodel = untangle.parse(datamodel_text)
 
         self._categories = list(self.generate_category_paths(self.datamodel.DataModel.categories))
@@ -364,6 +369,11 @@ class ConfigurableDataModel:
                 'categories': self._categories,
                 'attributes': self._attributes,
             }
+
+    def import_from_dict(self, data:dict):
+        self._categories = data.get('categories')
+        self._attributes = data.get('attributes')
+
 
     def get_category(self, *, path: str = None) -> dict:
         for cat in self._categories:
