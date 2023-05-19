@@ -49,7 +49,7 @@ class EarthRangerReaderState(pydantic.BaseModel):
     )
 
 
-def is_leaf_node(*, node_paths, cur_node):
+def is_leaf_node(*, node_paths=None, cur_node=None):
     is_leaf = True
     for path in node_paths:
         # determine if current path is subset of any category path
@@ -60,7 +60,7 @@ def is_leaf_node(*, node_paths, cur_node):
 
 
 def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
-    """Builds Earth Ranger Event Types from SMART CA data model or configurable data model if provided"""
+    """Builds EarthRanger Event Types from SMART CA data model or configurable data model if provided"""
     cats = parse_obj_as(List[Category], cdm.get('categories')) if cdm else parse_obj_as(List[Category], dm.get('categories'))
     cat_paths = [cat.path for cat in cats]
     attributes = parse_obj_as(List[Attribute], dm.get('attributes'))
@@ -71,7 +71,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
         try:
             leaf_attributes = cat.attributes
             is_multiple = cat.is_multiple
-            is_active = cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path) if not cdm else True
+            is_active = bool(cdm) or cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path)
             path_components = str.split(cat.hkeyPath, sep='.') if cdm else str.split(cat.path, sep='.')
             value = '_'.join(path_components)
             # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
