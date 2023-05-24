@@ -75,7 +75,12 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
             path_components = str.split(cat.hkeyPath, sep='.') if cdm else str.split(cat.path, sep='.')
             value = '_'.join(path_components)
             # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
-            value = f'{ca_uuid}_{value}'
+            
+            if cdm:
+                value = f'{ca_uuid}_{cdm["cm_uuid"]}_{value}'
+            else:
+                value = f'{ca_uuid}_{value}'
+            
             display = f'{ca_identifier} - {cat.display}'
             if not cdm:
                 # Add inherited attributes for regular DataModel Flow
@@ -188,7 +193,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                     # create event type that allows single value entry
                     display = attribute.display
                     converted_type = smart_er_type_mapping[attribute.type]
-                    converted_type = converted_type if converted_type is not 'array' else 'string'
+                    converted_type = converted_type if converted_type != 'array' else 'string'
                     properties[key] = dict(type=converted_type,
                                            title=display)
                     options = attribute.options

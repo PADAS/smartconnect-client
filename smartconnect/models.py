@@ -351,8 +351,9 @@ class DataModel:
 
 class ConfigurableDataModel:
 
-    def __init__(self, use_language_code='en'):
+    def __init__(self, use_language_code='en', cm_uuid=None):
         self.use_language_code = use_language_code
+        self.cm_uuid = cm_uuid
 
     def load(self, config_datamodel_text):
         # with open('config-datamodel-response.xml', 'w') as fo:
@@ -363,19 +364,21 @@ class ConfigurableDataModel:
         self._categories = list(self.generate_node_paths(self.config_datamodel.ConfigurableModel.nodes))
         self._attributes = list(self.generate_attributes(self.config_datamodel.ConfigurableModel))
         self._name = self.config_datamodel.ConfigurableModel.name['value']
-        pass
 
     def export_as_dict(self):
         return {
                 'categories': self._categories,
                 'attributes': self._attributes,
-                'name': self._name
+                'name': self._name,
+                'cm_uuid': self.cm_uuid,
+
             }
 
     def import_from_dict(self, data:dict):
         self._categories = data.get('categories')
         self._attributes = data.get('attributes')
         self._name = data.get('name')
+        self.cm_uuid = data.get('cm_uuid')
 
     def get_category(self, *, path: str = None) -> dict:
         for cat in self._categories:

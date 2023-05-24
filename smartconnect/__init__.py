@@ -190,8 +190,9 @@ class SmartClient:
                            status_code=config_datamodel.status_code))
             raise Exception('Failed to download Data Model')
 
-        cdm = ConfigurableDataModel()
+        cdm = ConfigurableDataModel(cm_uuid=cm_uuid)
         cdm.load(config_datamodel.text)
+        
         return cdm
 
     def get_configurable_data_model(self, *args, cm_uuid: str = None, use_cache: bool = True):
