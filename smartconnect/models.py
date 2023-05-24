@@ -362,18 +362,20 @@ class ConfigurableDataModel:
 
         self._categories = list(self.generate_node_paths(self.config_datamodel.ConfigurableModel.nodes))
         self._attributes = list(self.generate_attributes(self.config_datamodel.ConfigurableModel))
+        self._name = self.config_datamodel.ConfigurableModel.name['value']
         pass
 
     def export_as_dict(self):
         return {
                 'categories': self._categories,
                 'attributes': self._attributes,
+                'name': self._name
             }
 
     def import_from_dict(self, data:dict):
         self._categories = data.get('categories')
         self._attributes = data.get('attributes')
-
+        self._name = data.get('name')
 
     def get_category(self, *, path: str = None) -> dict:
         for cat in self._categories:
