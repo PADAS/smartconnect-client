@@ -59,7 +59,7 @@ def is_leaf_node(*, node_paths=None, cur_node=None):
     return is_leaf
 
 
-def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
+def build_earthranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
     """Builds EarthRanger Event Types from SMART CA data model or configurable data model if provided"""
     cats = parse_obj_as(List[Category], cdm.get('categories')) if cdm else parse_obj_as(List[Category], dm.get('categories'))
     cat_paths = [cat.path for cat in cats]
@@ -249,12 +249,12 @@ def get_subjects_from_patrol_data_model(pm: PatrolDataModel, ca_uuid: str):
     return subjects
 
 
-def get_earth_ranger_last_poll(integration_id: str):
+def get_earthranger_last_poll(integration_id: str):
     er_state = EarthRangerReaderState.parse_obj(cache.get_state(integration_id=integration_id))
     return er_state
 
 
-def set_earth_ranger_last_poll(integration_id: str, state: EarthRangerReaderState):
+def set_earthranger_last_poll(integration_id: str, state: EarthRangerReaderState):
     cache.save_poll_time(state=state.json(), integration_id=integration_id)
 
 
