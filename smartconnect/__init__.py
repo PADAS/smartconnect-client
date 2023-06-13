@@ -58,12 +58,12 @@ class SmartClient:
         if cas.ok:
             return SmartConnectApiInfo.parse_obj(cas.json())
 
-    def get_conservation_area(self, *args, ca_uuid: str = None, use_cache: bool = True):
+    def get_conservation_area(self, *args, ca_uuid: str = None, force: bool = False):
 
         assert not args, "This function does not accept positional arguments"
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
-        if use_cache:
+        if not force:
             self.logger.info(f"Looking up CA cached at {cache_key}.")
             try:
                 cached_data = cache.cache.get(cache_key)
@@ -195,7 +195,7 @@ class SmartClient:
         
         return cdm
 
-    def get_configurable_data_model(self, *args, cm_uuid: str = None, use_cache: bool = True):
+    def get_configurable_data_model(self, *args, cm_uuid: str = None, force: bool = False):
         # TODO: version consideration
         # TODO: Implement caching
 
@@ -204,7 +204,7 @@ class SmartClient:
         ca_uuid = 'na'
         cache_key = f'cache:smart-ca:{ca_uuid}:cdm:{cm_uuid}'
 
-        if use_cache:
+        if not force:
             try:
                 cached_data = cache.cache.get(cache_key)
                 if cached_data:
@@ -227,7 +227,7 @@ class SmartClient:
         cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
         return ca_config_datamodel
 
-    def get_data_model(self, *args, ca_uuid: str = None, use_cache: bool = True):
+    def get_data_model(self, *args, ca_uuid: str = None, force: bool = False):
 
         assert not args, "get_data_model() takes no positional arguments."
 
@@ -238,7 +238,7 @@ class SmartClient:
             return blank_datamodel
 
         cache_key = f"cache:smart-ca:{ca_uuid}:datamodel"
-        if use_cache:
+        if not force:
             try:
                 cached_data = cache.cache.get(cache_key)
                 if cached_data:

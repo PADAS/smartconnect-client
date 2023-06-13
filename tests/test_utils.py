@@ -11,8 +11,8 @@ import json
 from dasclient.dasclient import DasClient
 
 from smartconnect import SmartClient, utils
-from smartconnect.er_sync_utils import build_earth_ranger_event_types, er_event_type_schemas_equal, \
-    get_subjects_from_patrol_data_model, ERSubject, er_subjects_equal, build_earth_ranger_event_types_from_cdm
+from smartconnect.er_sync_utils import build_earthranger_event_types, er_event_type_schemas_equal, \
+    get_subjects_from_patrol_data_model, ERSubject, er_subjects_equal, build_earthranger_event_types_from_cdm
 
 # Testing CA: Sintegrate at connect7.refractions.net:8443/server/connect/home
 # CA_UUID = '8f7fbe1b-201a-4ef4-bda8-14f5581e65ce'
@@ -48,7 +48,7 @@ def test_get_conservation_area():
     dm = smart_client.download_datamodel(ca_uuid=ca_uuid)
     dm_dict = dm.export_as_dict()
 
-    event_types = build_earth_ranger_event_types(dm_dict)
+    event_types = build_earthranger_event_types(dm_dict)
 
     existing_event_categories = das_client.get_event_categories()
     event_category = next((x for x in existing_event_categories if x.get('value') == CA_LABEL[0:40]), None)
@@ -155,21 +155,21 @@ def add_waypoint():
 
 def download_datamodel():
     smart_client = SmartClient(api='https://pantheraearthrangertest.smartconservationtools.org/server', username='EarthRanger', password='EarthRanger', use_language_code='en')
-    smart_client.get_data_model(ca_uuid="e71d62fe-43c2-418f-bd6f-2f6bb09807dc", use_cache=False)
+    smart_client.get_data_model(ca_uuid="e71d62fe-43c2-418f-bd6f-2f6bb09807dc", force=True)
 
 def download_configurable_datamodel():
     smart_client = SmartClient(api='https://pantheraearthrangertest.smartconservationtools.org/server', username='EarthRanger', password='EarthRanger', use_language_code='en')
-    smart_client.get_configurable_data_model(cm_uuid="22f8ac6ccca04f2fba4361392f9bc8cb", use_cache=False)
+    smart_client.get_configurable_data_model(cm_uuid="22f8ac6ccca04f2fba4361392f9bc8cb", force=True)
 
-def build_earth_ranger_event_types_from_config_dm_test():
+def build_earthranger_event_types_from_config_dm_test():
     ca_uuid="e71d62fe-43c2-418f-bd6f-2f6bb09807dc"
     smart_client = SmartClient(api='https://pantheraearthrangertest.smartconservationtools.org/server',
                                username='EarthRanger', password='EarthRanger', use_language_code='en')
     cm_uuid = smart_client.get_configurable_datamodel_for_ca(ca_uuid=ca_uuid)
-    dm = smart_client.get_data_model(ca_uuid=ca_uuid, use_cache=False)
-    cdm = smart_client.get_configurable_data_model(cm_uuid=cm_uuid, use_cache=False)
+    dm = smart_client.get_data_model(ca_uuid=ca_uuid, force=True)
+    cdm = smart_client.get_configurable_data_model(cm_uuid=cm_uuid, force=True)
     if cdm and dm:
-        event_types = build_earth_ranger_event_types_from_cdm(dm=dm.export_as_dict(), ca_uuid=ca_uuid, ca_identifier="test", cdm=cdm.export_as_dict())
+        event_types = build_earthranger_event_types_from_cdm(dm=dm.export_as_dict(), ca_uuid=ca_uuid, ca_identifier="test", cdm=cdm.export_as_dict())
         pass
 
 
@@ -189,6 +189,6 @@ if __name__ == '__main__':
 
     # download_datamodel()
     # download_configurable_datamodel()
-    build_earth_ranger_event_types_from_config_dm_test()
+    build_earthranger_event_types_from_config_dm_test()
     # get_smart_connect_server_version()
 
