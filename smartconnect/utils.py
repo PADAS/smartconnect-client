@@ -1,29 +1,27 @@
 import pytz
+import shapely
 
 import json
 import statistics, timezonefinder
 from datetime import timezone, tzinfo
-
+import os
+print(os.getcwd())
 from smartconnect import models
 
 def guess_ca_timezone(ca:models.ConservationArea) -> tzinfo:
     '''
-    Guess the timezone based on boundary.
-    This naively uses the average longitude and latitude values from the boundary's 
-    multipolygon. An improvment might be to calculate a centroid, or better yet to
-    find all intersected timezones and pick the most prominent one.
+    Guess the timezone based on boundary included with the conservation area metadata.
+
+    Args: a ConservationArea 
+    Returns: a tzinfo object representing the timezone for the center of the conservation area, or None
+    References: https://pypi.org/project/timezonefinder/
+
+    The ConservationArea object has a field called caBoundaryJson which is string holding a GeoJSON object.
     '''
-    boundary = json.loads(ca.caBoundaryJson)
 
-    accum = []
-    for geometry in boundary['geometries']:
-        if geometry['type'] == 'MultiPolygon':
-            accum.extend(geometry['coordinates'][0][0])
+    boundary = shapely.from_geojson(ca.caBoundaryJson, on_invalid='warn')
 
-    avg_longitude = statistics.mean([x[0] for x in accum])
-    avg_latitude = statistics.mean([x[1] for x in accum])
+    if boundary:
+        predicted_timezone = timezonefinder.TimezoneFinder().timezone_at(lng=boundary.centroid.x, lat=boundary.centroid.y)        
+        return pytz.timezone(predicted_timezone)
 
-    print(f'Average: {avg_longitude}, {avg_latitude}')
-
-    predicted_timezone = timezonefinder.TimezoneFinder().timezone_at(lng=avg_longitude, lat=avg_latitude)        
-    return pytz.timezone(predicted_timezone)
