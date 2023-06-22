@@ -18,7 +18,7 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
     ConfigurableDataModel, SmartConnectApiInfo
 
 # Manually bump this.
-__version__ = '1.0.3'
+__version__ = '1.4.2'
 
 DEFAULT_TIMEOUT = (3.1, smart_settings.SMART_DEFAULT_TIMEOUT)
 

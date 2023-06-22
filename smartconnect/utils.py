@@ -1,11 +1,9 @@
 import pytz
 import shapely
 
-import json
-import statistics, timezonefinder
-from datetime import timezone, tzinfo
-import os
-print(os.getcwd())
+import timezonefinder
+from datetime import tzinfo
+
 from smartconnect import models
 
 def guess_ca_timezone(ca:models.ConservationArea) -> tzinfo:
@@ -19,6 +17,9 @@ def guess_ca_timezone(ca:models.ConservationArea) -> tzinfo:
     The ConservationArea object has a field called caBoundaryJson which is string holding a GeoJSON object.
     '''
 
+    if not ca or not ca.caBoundaryJson:
+        return 
+    
     boundary = shapely.from_geojson(ca.caBoundaryJson, on_invalid='warn')
 
     if boundary:
