@@ -371,7 +371,7 @@ class SmartClient:
 
     def get_patrol(self, *args, patrol_id=None):
         assert not args, "get_patrol() takes no positional arguments."
-        patrol = None
+
         response = requests.get(f'{self.api}/api/query/custom/patrol',
                                  auth=self.auth,
                                  params= {"client_patrol_uuid": patrol_id},
@@ -380,11 +380,11 @@ class SmartClient:
 
         if response.ok and len(response.json()) > 0:
             patrol = parse_obj_as(List[Patrol],response.json())[0]
-        return patrol
+            return patrol
 
     def get_patrol_waypoints(self, *args, patrol_id=None):
         assert not args, "get_patrol_waypoints() takes no positional arguments."
-        waypoints = None
+
         response = requests.get(f'{self.api}/api/query/custom/waypoint/patrol',
                                  auth=self.auth,
                                  params= {"client_patrol_uuid": patrol_id},
@@ -393,12 +393,11 @@ class SmartClient:
 
         if response.ok and len(response.json()) > 0:
             smart_response = parse_obj_as(List[SMARTResponse],response.json())
-            waypoints = [item.properties.waypoint for item in smart_response]
-        return waypoints
+            return [item.properties.waypoint for item in smart_response]
+
 
     def get_incident(self, *args, incident_uuid=None):
         assert not args, "get_incident() takes no positional arguments."
-        smart_response = None
         url = f'{self.api}/api/query/custom/waypoint/incident'
         response = requests.get(url,
                                 auth=self.auth,
@@ -406,12 +405,15 @@ class SmartClient:
                                 verify=self.verify_ssl,
                                 timeout=DEFAULT_TIMEOUT)
 
-        if response.ok and len(response.json()) > 0:
-            smart_response = parse_obj_as(List[SMARTResponse], response.json())
-        else:
-            logger.error("Bad response from SMART Connect", extra=dict(url=url,
-                                                                       response_content=response.content))
-        return smart_response
+        if not response.ok:
+            logger.error("Failed lookup for incident %s", incident_uuid,
+                     extra=dict(url=url,
+                                response_content=response.content)
+                         )
+
+        response_data = response.json()
+        if response_data and isinstance(response_data, list):
+            return parse_obj_as(List[SMARTResponse], response_data)
 
     def generate_patrol_label(self, *args, device_id=None, prefix='wildlife', ts=None):
         assert not args, "generate_patrol_label() takes no positional arguments."
@@ -422,20 +424,31 @@ class SmartClient:
     def post_smart_request(self, *args, json: str, ca_uuid: str = None):
         assert not args, "post_smart_request() takes no positional arguments."
 
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+        url = f'{self.api}/api/data/{ca_uuid}'
+        response = requests.post(url,
                                  headers={'content-type': 'application/json'},
                                  data=json,
                                  auth=self.auth,
                                  timeout=DEFAULT_TIMEOUT,
                                  verify=self.verify_ssl)
         if response.ok:
-            logger.info("posted request to SMART successfully")
+            logger.info("Posted request to SMART successfully")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("SMART request succeeded", extra=dict(url=url,
+                                                                   ca_uuid=ca_uuid,
+                                                         request=json,
+                                                         response=response.content),
+                                                         response_code=response.status_code)
         else:
-            logger.error("SMART request Failed", extra=dict(ca_uuid=ca_uuid,
-                                                            request=json,
-                                                            response=response.content))
-            raise SMARTClientException("SMART request Failed")
-
+            message = f"SMART request failed for {url} with response code {response.status_code}"
+            logger.exception(message, extra=dict(url=url,
+                                                    ca_uuid=ca_uuid,
+                                                    request=json,
+                                                    response=response.content,
+                                                    response_code=response.status_code)
+                                                    )
+            raise SMARTClientException(message)
+        
     # Functions for quick testing
     def add_patrol_trackpoint(self, *args, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
         assert not args, "add_patrol_trackpoint() takes no positional arguments."
