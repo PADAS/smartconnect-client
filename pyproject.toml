@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "smartconnect-client"
-version = "1.2.10"
+version = "1.4.3"
 description = ""
-authors = ["Chris Doehring <***REMOVED***oehring@gmail.com>"]
+authors = ["Chris Doehring <***REMOVED***o@earthranger.com>"]
 
 packages = [
     {include = "smartconnect" },
@@ -20,6 +20,7 @@ dateparser = "^1.0.0"
 timezonefinder = "^5.2.0"
 environs= "^9.3.0"
 numpy= "<1.21.7"
+shapely = "^2.0.1"
 
 
 [tool.poetry.dev-dependencies]
