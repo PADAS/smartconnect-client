@@ -49,7 +49,7 @@ class EarthRangerReaderState(pydantic.BaseModel):
     )
 
 
-def is_leaf_node(*, node_paths, cur_node):
+def is_leaf_node(*, node_paths=None, cur_node=None):
     is_leaf = True
     for path in node_paths:
         # determine if current path is subset of any category path
@@ -59,8 +59,8 @@ def is_leaf_node(*, node_paths, cur_node):
     return is_leaf
 
 
-def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
-    """Builds Earth Ranger Event Types from SMART CA data model or configurable data model if provided"""
+def build_earthranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
+    """Builds EarthRanger Event Types from SMART CA data model or configurable data model if provided"""
     cats = parse_obj_as(List[Category], cdm.get('categories')) if cdm else parse_obj_as(List[Category], dm.get('categories'))
     cat_paths = [cat.path for cat in cats]
     attributes = parse_obj_as(List[Attribute], dm.get('attributes'))
@@ -71,11 +71,16 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
         try:
             leaf_attributes = cat.attributes
             is_multiple = cat.is_multiple
-            is_active = cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path) if not cdm else True
+            is_active = bool(cdm) or cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path)
             path_components = str.split(cat.hkeyPath, sep='.') if cdm else str.split(cat.path, sep='.')
             value = '_'.join(path_components)
             # appending ca_uuid prefix to avoid collision on equivalent cat paths in different CA's
-            value = f'{ca_uuid}_{value}'
+            
+            if cdm:
+                value = f'{ca_uuid}_{cdm["cm_uuid"]}_{value}'
+            else:
+                value = f'{ca_uuid}_{value}'
+            
             display = f'{ca_identifier} - {cat.display}'
             if not cdm:
                 # Add inherited attributes for regular DataModel Flow
@@ -104,7 +109,7 @@ def build_earth_ranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str
                     continue
 
                 # ER API requires schema as a string
-                er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True))
+                er_event_type.event_schema = json.dumps(SchemaWrapper(schema=schema).dict(by_alias=True), indent=2)
 
             er_event_types.append(er_event_type)
         except Exception as e:
@@ -188,7 +193,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                     # create event type that allows single value entry
                     display = attribute.display
                     converted_type = smart_er_type_mapping[attribute.type]
-                    converted_type = converted_type if converted_type is not 'array' else 'string'
+                    converted_type = converted_type if converted_type != 'array' else 'string'
                     properties[key] = dict(type=converted_type,
                                            title=display)
                     options = attribute.options
@@ -224,6 +229,7 @@ def er_event_type_schemas_equal(schema1: dict, schema2: dict):
 
 
 def er_subjects_equal(subject1: ERSubject, subject2: ERSubject):
+    #Todo: revisit this, to see whether IDs are appropriate. Or add a side-data identifier for the subjects added by this routine.
     return subject1.name == subject2.name
 
 
@@ -243,12 +249,12 @@ def get_subjects_from_patrol_data_model(pm: PatrolDataModel, ca_uuid: str):
     return subjects
 
 
-def get_earth_ranger_last_poll(integration_id: str):
+def get_earthranger_last_poll(integration_id: str):
     er_state = EarthRangerReaderState.parse_obj(cache.get_state(integration_id=integration_id))
     return er_state
 
 
-def set_earth_ranger_last_poll(integration_id: str, state: EarthRangerReaderState):
+def set_earthranger_last_poll(integration_id: str, state: EarthRangerReaderState):
     cache.save_poll_time(state=state.json(), integration_id=integration_id)
 
 

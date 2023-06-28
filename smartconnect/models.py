@@ -194,6 +194,13 @@ class ConservationArea(BaseModel):
     administrativeAreasJson: Optional[Any]
     uuid: uuid.UUID
 
+class SmartConnectApiInfo(BaseModel):
+    build_date: str = Field(None, alias='build-date')
+    build_version: str = Field(None, alias='build-version')
+    db_last_updated: str = Field(None, alias='db-last-updated')
+    file_store_version: str = Field(None, alias='file-store-version')
+    db_version: str = Field(None, alias='db-version')
+
 
 class SMARTCompositeRequest(BaseModel):
     ca_uuid: str
@@ -208,8 +215,6 @@ class DataModel:
         self.use_language_code = use_language_code
 
     def load(self, datamodel_text):
-        # with open('chunga-datamodel-response.xml', 'w') as fo:
-        #     fo.write(datamodel_text)
         self.datamodel = untangle.parse(datamodel_text)
 
         self._categories = list(self.generate_category_paths(self.datamodel.DataModel.categories))
@@ -277,9 +282,15 @@ class DataModel:
                     child = elem
 
                     this_key = '.'.join([prefix, child['key']])
+
+                    if hasattr(child, 'names'):
+                        display = self.resolve_display(child.names, language_code=self.use_language_code)
+                    else:
+                        display = this_key
+
                     val = {
                         'key': this_key,
-                        'display': self.resolve_display(child.names, language_code=self.use_language_code),
+                        'display': display,
                     }
                     yield val
                     yield from self.generate_tree_children(child, prefix=this_key)
@@ -340,8 +351,9 @@ class DataModel:
 
 class ConfigurableDataModel:
 
-    def __init__(self, use_language_code='en'):
+    def __init__(self, use_language_code='en', cm_uuid=None):
         self.use_language_code = use_language_code
+        self.cm_uuid = cm_uuid
 
     def load(self, config_datamodel_text):
         # with open('config-datamodel-response.xml', 'w') as fo:
@@ -351,13 +363,22 @@ class ConfigurableDataModel:
 
         self._categories = list(self.generate_node_paths(self.config_datamodel.ConfigurableModel.nodes))
         self._attributes = list(self.generate_attributes(self.config_datamodel.ConfigurableModel))
-        pass
+        self._name = self.config_datamodel.ConfigurableModel.name['value']
 
     def export_as_dict(self):
         return {
                 'categories': self._categories,
                 'attributes': self._attributes,
+                'name': self._name,
+                'cm_uuid': self.cm_uuid,
+
             }
+
+    def import_from_dict(self, data:dict):
+        self._categories = data.get('categories')
+        self._attributes = data.get('attributes')
+        self._name = data.get('name')
+        self.cm_uuid = data.get('cm_uuid')
 
     def get_category(self, *, path: str = None) -> dict:
         for cat in self._categories:
