@@ -298,7 +298,7 @@ class SmartClient:
                            status_code=ca_datamodel.status_code))
             raise Exception('Failed to download Data Model')
 
-        dm = DataModel()
+        dm = DataModel(use_language_code=self.use_language_code)
         dm.load(ca_datamodel.text)
         return dm
 
