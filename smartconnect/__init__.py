@@ -190,7 +190,7 @@ class SmartClient:
                            status_code=config_datamodel.status_code))
             raise Exception('Failed to download Data Model')
 
-        cdm = ConfigurableDataModel(cm_uuid=cm_uuid)
+        cdm = ConfigurableDataModel(cm_uuid=cm_uuid, use_language_code=self.use_language_code)
         cdm.load(config_datamodel.text)
         
         return cdm
@@ -242,7 +242,7 @@ class SmartClient:
             try:
                 cached_data = cache.cache.get(cache_key)
                 if cached_data:
-                    dm = DataModel()
+                    dm = DataModel(use_language_code=self.use_language_code)
                     dm.import_from_dict(json.loads(cached_data))
                     self.logger.debug(
                         f"Using cached SMART Datamodel", extra={"cached_key": cache_key}
@@ -298,7 +298,7 @@ class SmartClient:
                            status_code=ca_datamodel.status_code))
             raise Exception('Failed to download Data Model')
 
-        dm = DataModel()
+        dm = DataModel(use_language_code=self.use_language_code)
         dm.load(ca_datamodel.text)
         return dm
 
