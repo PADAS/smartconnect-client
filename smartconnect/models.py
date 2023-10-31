@@ -248,8 +248,14 @@ class DataModel:
                 return att
 
     def generate_category_attributes(self, root):
-        if hasattr(root, 'attributes'):
-            for attribute in root.attributes:
+
+        # if hasattr(root, 'attributes'):
+        #     attribute_list = root.attributes
+        # if hasattr(root, 'attribute'):
+        #     attribute_list = root.attribute
+
+        if attribute_list := getattr(root, 'attributes', None) or getattr(root, 'attribute', None):
+            for attribute in attribute_list:
                 yield {
                     'key': attribute['attributekey'],
                     'isactive': attribute['isactive'] == 'true'
