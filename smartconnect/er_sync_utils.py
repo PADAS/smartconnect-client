@@ -81,7 +81,7 @@ def build_earthranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str,
             else:
                 value = f'{ca_uuid}_{value}'
             
-            display = f'{ca_identifier} - {cat.display}'
+            display = f'{cat.display}'
             if not cdm:
                 # Add inherited attributes for regular DataModel Flow
                 inherited_attributes = get_inherited_attributes(cats, path_components)
