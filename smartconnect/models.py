@@ -221,7 +221,7 @@ class DataModel:
         self._attributes = list(self.generate_attributes(self.datamodel.DataModel.attributes))
 
     def save(self, filename='_si-datamodel.json'):
-        with open('_si-datamodel.json', 'w') as fo:
+        with open(filename, 'w') as fo:
             json.dump({
                 'categories': self._categories,
                 'attributes': self._attributes,
