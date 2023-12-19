@@ -202,12 +202,11 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                             options = get_leaf_options_with_config(options, optionsConfig=attributeOptionsConfig)
                         else:
                             options = get_leaf_options(options)
-                        enum_values = [x.key for x in options]
-                        enum_display = [x.display for x in options]
-                        properties[key]['enum'] = enum_values
-                        properties[key]['enumNames'] = enum_display
+
+                        properties[key]['enum'] = [x.key for x in options]
+                        properties[key]['enumNames'] = dict([(x.key, x.display) for x in options])
             else:
-                print('Failed to find attribute')
+                logger.warning('Attribute not found in data model', extra=dict(key=key))
         except Exception as e:
             logger.error(f"Error occurred while building schema for category attribute key {key}")
     # append_custom_attributes(properties=properties)
