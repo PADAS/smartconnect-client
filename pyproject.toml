@@ -21,7 +21,7 @@ timezonefinder = "^5.2.0"
 environs= "^9.3.0"
 numpy= "<1.21.7"
 shapely = "^2.0.1"
-httpx = "^0.26.0"
+httpx = "^0.24.0"
 
 
 [tool.poetry.dev-dependencies]
