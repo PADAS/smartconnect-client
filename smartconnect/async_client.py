@@ -70,7 +70,7 @@ class AsyncSmartClient:
         if cas.is_success:
             return SmartConnectApiInfo.parse_obj(cas.json())
 
-    def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
+    async def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
         if not force:
@@ -94,7 +94,7 @@ class AsyncSmartClient:
                 self.username,
             )
 
-            for ca in self.get_conservation_areas():
+            for ca in await self.get_conservation_areas():
                 if ca.uuid == uuid.UUID(ca_uuid):
                     conservation_area = ca
                     break
@@ -350,8 +350,8 @@ class AsyncSmartClient:
             params={"client_patrol_uuid": patrol_id},
         )
 
-        if response.is_success and len(response.json()) > 0:
-            patrol = parse_obj_as(List[Patrol], response.json())[0]
+        if response.is_success and (json_response := response.json()):
+            patrol = parse_obj_as(List[Patrol], json_response)[0]
             return patrol
 
     async def get_patrol_waypoints(self, *, patrol_id=None):
@@ -361,8 +361,8 @@ class AsyncSmartClient:
             params={"client_patrol_uuid": patrol_id},
         )
 
-        if response.is_success and len(response.json()) > 0:
-            smart_response = parse_obj_as(List[SMARTResponse], response.json())
+        if response.is_success and (json_response := response.json()):
+            smart_response = parse_obj_as(List[SMARTResponse], json_response)
             return [item.properties.waypoint for item in smart_response]
 
     async def get_incident(self, *, incident_uuid=None):
@@ -391,24 +391,10 @@ class AsyncSmartClient:
         url = f'{self.api}/api/data/{ca_uuid}'
         response = await self._session.post(
             url,
-            headers={'content-type': 'application/json'},
             json=json,
             auth=self.auth,
         )
-        if response.is_success:
-            logger.info("Posted request to SMART successfully")
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "SMART request succeeded",
-                    extra=dict(
-                        url=url,
-                        ca_uuid=ca_uuid,
-                        request=json,
-                        response=response.content,
-                        response_code=response.status_code
-                    ),
-                )
-        else:
+        if not response.is_success:
             message = f"SMART request failed for {url} with response code {response.status_code}"
             logger.exception(
                 message,
@@ -421,6 +407,20 @@ class AsyncSmartClient:
                 )
             )
             raise SMARTClientException(message)
+
+        logger.info("Posted request to SMART successfully")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "SMART request succeeded",
+                extra=dict(
+                    url=url,
+                    ca_uuid=ca_uuid,
+                    request=json,
+                    response=response.content,
+                    response_code=response.status_code
+                ),
+            )
+        return response.json()
 
     # Functions for quick testing
     async def add_patrol_trackpoint(self, *, ca_uuid: str = None, patrol_uuid: str = None,
