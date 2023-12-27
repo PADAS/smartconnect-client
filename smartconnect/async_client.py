@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import pytz
 import httpx
@@ -387,13 +387,18 @@ class AsyncSmartClient:
         ts = ts or datetime.now(tz=pytz.utc)
         return '/'.join((prefix, device_id, ts.strftime('%Y/%m')))
 
-    async def post_smart_request(self, *, json: str, ca_uuid: str = None):
+    async def post_smart_request(self, *, json: Union[dict, str], ca_uuid: str = None):
         url = f'{self.api}/api/data/{ca_uuid}'
-        response = await self._session.post(
-            url,
-            json=json,
-            auth=self.auth,
-        )
+        kwargs = {"auth": self.auth}
+        # json payload can be provided as a dict or as a json string
+        if isinstance(json, dict):
+            kwargs["json"] = json
+        elif isinstance(json, str):
+            kwargs["data"] = json
+            kwargs["headers"] = {"content-type": "application/json"}
+        else:
+            raise ValueError("json param must be a dict or a json string")
+        response = await self._session.post(url, **kwargs)
         if not response.is_success:
             message = f"SMART request failed for {url} with response code {response.status_code}"
             logger.exception(
