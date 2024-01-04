@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "smartconnect-client"
-version = "1.4.7"
+version = "1.5.1"
 description = ""
 authors = ["Chris Doehring <***REMOVED***o@earthranger.com>"]
 
@@ -9,7 +9,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 requests = "^2.25.1"
 pydantic = "^1.8.2"
 pytz = "^2021.1"
@@ -21,10 +21,14 @@ timezonefinder = "^5.2.0"
 environs= "^9.3.0"
 numpy= "<1.21.7"
 shapely = "^2.0.1"
+httpx = "^0.24.0"
 
 
 [tool.poetry.dev-dependencies]
-pytest = "^5.2"
+pytest = "^7.2"
+pytest-asyncio = "^0.20"
+pytest-mock = "^3.10"
+respx = "^0.20.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
