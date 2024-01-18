@@ -296,10 +296,6 @@ class AsyncSmartClient:
             dm = DataModel(use_language_code=self.use_language_code)
             dm.load(ca_datamodel.decode("utf-8"))
 
-            print("Writing data model xml to....")
-            with open('gunditest-datamodel.xml', 'w') as fo:
-                fo.write(ca_datamodel.decode("utf-8"))
-
             return dm
 
     def load_datamodel(self, *, filename=None):
