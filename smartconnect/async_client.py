@@ -70,6 +70,10 @@ class AsyncSmartClient:
         if cas.is_success:
             return SmartConnectApiInfo.parse_obj(cas.json())
 
+        # Just for sanity, log a warning if we get a server error. It's likely it doesn
+        if cas.is_server_error:
+            logger.warning(f'The SMART Connect server at {self.api} might not support the /api/info request.')
+
     async def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
@@ -291,6 +295,11 @@ class AsyncSmartClient:
 
             dm = DataModel(use_language_code=self.use_language_code)
             dm.load(ca_datamodel.decode("utf-8"))
+
+            print("Writing data model xml to....")
+            with open('gunditest-datamodel.xml', 'w') as fo:
+                fo.write(ca_datamodel.decode("utf-8"))
+
             return dm
 
     def load_datamodel(self, *, filename=None):
