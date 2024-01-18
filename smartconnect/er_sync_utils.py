@@ -18,6 +18,7 @@ smart_er_type_mapping = {'TEXT': 'string',
                          'BOOLEAN': 'boolean',
                          'TREE': 'array',
                          'LIST': 'array',
+                         'MLIST': 'array',
                          'DATE': 'string'}
 
 class EventSchema(BaseModel):
@@ -70,7 +71,6 @@ def build_earthranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str,
     for cat in cats:
         try:
             leaf_attributes = cat.attributes
-            is_multiple = cat.is_multiple
             is_active = bool(cdm) or cat.is_active and is_leaf_node(node_paths=cat_paths, cur_node=cat.path)
             path_components = str.split(cat.hkeyPath, sep='.') if cdm else str.split(cat.path, sep='.')
             value = '_'.join(path_components)
@@ -100,7 +100,7 @@ def build_earthranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str,
                     continue
 
                 schema = build_schema_and_form_definition(attributes=attributes, leaf_attributes=leaf_attributes,
-                                                          is_multiple=is_multiple, attributeConfigs=attributeConfigs)
+                                                          is_multiple=cat.is_multiple, attributeConfigs=attributeConfigs)
 
                 if not schema.properties:
                     logger.warning(f'Skipping event type, no schema properties detected',
@@ -156,7 +156,13 @@ def get_leaf_options_with_config(options, optionsConfig = None):
     return leaf_options
 
 
-def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attributes: List[CategoryAttribute], is_multiple: bool, attributeConfigs = None):
+def build_schema_and_form_definition(*args, attributes: List[Attribute] = None,
+                                     leaf_attributes: List[CategoryAttribute] = None,
+                                     is_multiple: bool = False,
+                                     attributeConfigs = None):
+
+    assert not args, "This function takes keyword arguments only"
+
     properties = {}
     schema_definition = []
     attribute_meta: CategoryAttribute
@@ -172,7 +178,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
                     #  Excluding entirely form schema for now if not is_active until that ability is determined
                     continue
                 schema_definition.append(key)
-                # Right now we are not supporting multiple observation support
+                # TODO: Right now we are not supporting multiple observation support
                 if is_multiple and False:
                     # create event type that allows multiple value entries
                     type = attribute.type
@@ -208,7 +214,7 @@ def build_schema_and_form_definition(*, attributes: List[Attribute], leaf_attrib
             else:
                 logger.warning('Attribute not found in data model', extra=dict(key=key))
         except Exception as e:
-            logger.error(f"Error occurred while building schema for category attribute key {key}")
+            logger.exception(f"Error occurred while building schema for category attribute key {key}")
     # append_custom_attributes(properties=properties)
     schema = EventSchema(definition=schema_definition,
                          properties=properties,
