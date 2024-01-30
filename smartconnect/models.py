@@ -220,7 +220,8 @@ class DataModel:
         self._categories = list(self.generate_category_paths(self.datamodel.DataModel.categories))
         self._attributes = list(self.generate_attributes(self.datamodel.DataModel.attributes))
 
-    def save(self, filename='_si-datamodel.json'):
+    def save(self, filename='datamodel.json'):
+
         with open(filename, 'w') as fo:
             json.dump({
                 'categories': self._categories,
@@ -364,7 +365,12 @@ class ConfigurableDataModel:
 
         self._categories = list(self.generate_node_paths(self.config_datamodel.ConfigurableModel.nodes))
         self._attributes = list(self.generate_attributes(self.config_datamodel.ConfigurableModel))
-        self._name = self.config_datamodel.ConfigurableModel.name['value']
+
+        name_element = self.config_datamodel.ConfigurableModel.name
+        if isinstance(name_element, untangle.Element):
+            self._name = name_element['value']
+        elif isinstance(name_element, list):
+            self._name = next(elem for elem in name_element if elem['language_code'] == self.use_language_code)['value']
 
     def export_as_dict(self):
         return {
