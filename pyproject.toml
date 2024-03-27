@@ -2,7 +2,7 @@
 name = "smartconnect-client"
 version = "1.5.2"
 description = ""
-authors = ["Chris Doehring <***REMOVED***o@earthranger.com>"]
+authors = ["Chris Doehring <chrisdo@earthranger.com>"]
 
 packages = [
     {include = "smartconnect" },
