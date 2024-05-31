@@ -22,6 +22,19 @@ class SMARTClientException(Exception):
     pass
 
 
+from functools import wraps
+def with_login_session():
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            # async with self._session as session:
+            await self.ensure_login()
+            return await func(self, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
 class AsyncSmartClient:
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
@@ -31,7 +44,7 @@ class AsyncSmartClient:
         self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
         self.password = password
-        self.auth = httpx.BasicAuth(username=self.username, password=self.password)
+
         self.use_language_code = use_language_code
         self.version = version
 
@@ -47,6 +60,26 @@ class AsyncSmartClient:
         # Session
         self._session = httpx.AsyncClient(transport=transport, timeout=timeout, verify=self.verify_ssl)
 
+    async def ensure_login(self):
+        '''
+        Login flow for SMART Connect. If the session already has a JSESSIONID cookie, it is assumed to be logged in.
+        '''
+        for k, v in self._session.cookies.items():
+            if k == 'JSESSIONID' and v:
+                return self._session
+        
+        # Request the landing page to prime the session.
+        landing_page = await self._session.get(f'{self.api}/connect/home')
+        if not landing_page.is_success:
+            raise SMARTClientException(f"Failed to retrieve landing page. Status code: {landing_page.status_code}")
+        
+        login_result = await self._session.post(f'{self.api}/j_security_check', data={"j_username": self.username, "j_password": self.password})
+
+        if login_result.is_success or login_result.is_redirect:
+            return self._session
+        
+        raise SMARTClientException(f"Failed to login to SMART Connect. Status code: {login_result.status_code}")
+
     async def close(self):
         await self._session.aclose()
 
@@ -58,10 +91,11 @@ class AsyncSmartClient:
     async def __aexit__(self, exc_type, exc_value, traceback):
         await self._session.__aexit__()
 
+    @with_login_session()
     async def get_server_api_info(self):
+
         cas = await self._session.get(
             f'{self.api}/api/info',
-            auth=self.auth,
             headers={
                 'accept': 'application/json',
             },
@@ -74,6 +108,7 @@ class AsyncSmartClient:
         if cas.is_server_error:
             logger.warning(f'The SMART Connect server at {self.api} might not support the /api/info request.')
 
+    @with_login_session()
     async def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
@@ -123,10 +158,11 @@ class AsyncSmartClient:
             )
             raise SMARTClientException(f"Failed to get SMART Conservation Areas") from ex
 
+    @with_login_session()
     async def get_conservation_areas(self) -> List[models.ConservationArea]:
+
         cas = await self._session.get(
             f'{self.api}/api/conservationarea',
-            auth=self.auth,
             headers={
                 'accept': 'application/json',
             },
@@ -134,9 +170,13 @@ class AsyncSmartClient:
 
         if cas.is_success:
             cas = cas.json()
+            return [models.ConservationArea.parse_obj(ca) for ca in cas]
+        
+        logger.error(f"Failed to get Conservation Areas. Status code is: {cas.status_code}")
+        raise SMARTClientException(f"Failed to get Conservation Areas")
 
-        return [models.ConservationArea.parse_obj(ca) for ca in cas]
 
+    @with_login_session()
     async def list_configurable_datamodels(self, *, ca_uuid: str):
 
         assert ca_uuid, "ca_uuid is required"
@@ -148,10 +188,10 @@ class AsyncSmartClient:
         extra_dict = dict(ca_uuid=ca_uuid,
                           url=f'{self.api}/metadata/configurablemodel')
 
+
         async with self._session.stream(
                 "GET",
                 f'{self.api}/api/metadata/configurablemodel',
-                auth=self.auth,
                 params={"ca_uuid": ca_uuid},
                 headers={
                     'accept': 'application/json',
@@ -171,6 +211,7 @@ class AsyncSmartClient:
             cdms = config_datamodels.json()
             return cdms
 
+    @with_login_session()
     async def download_configurable_datamodel(self, *, cm_uuid: str = None):
 
         extra_dict = dict(cm_uuid=cm_uuid,
@@ -179,7 +220,6 @@ class AsyncSmartClient:
         async with self._session.stream(
                 "GET",
                 f'{self.api}/api/metadata/configurablemodel/{cm_uuid}',
-                auth=self.auth,
                 headers={
                     'accept': 'application/xml',
                 },
@@ -200,6 +240,7 @@ class AsyncSmartClient:
 
             return cdm
 
+    @with_login_session()
     async def get_configurable_data_model(self, *, cm_uuid: str = None, force: bool = False):
         # TODO: version consideration
         # TODO: Implement caching
@@ -229,6 +270,7 @@ class AsyncSmartClient:
         cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
         return ca_config_datamodel
 
+    @with_login_session()
     async def get_data_model(self, *, ca_uuid: str = None, force: bool = False):
 
         # CA Data Model is not available for versions below 7. Use a blank data model.
@@ -270,15 +312,16 @@ class AsyncSmartClient:
 
         return ca_datamodel
 
+    @with_login_session()
     async def download_datamodel(self, *, ca_uuid: str = None):
         extra_dict = dict(
             ca_uuid=ca_uuid,
             url=f'{self.api}/api/metadata/datamodel/{ca_uuid}'
         )
+        
         async with self._session.stream(
                 "GET",
                 f'{self.api}/api/metadata/datamodel/{ca_uuid}',
-                auth=self.auth,
                 headers={
                     'accept': 'application/xml',
                 },
@@ -305,11 +348,12 @@ class AsyncSmartClient:
             dm.load(contents)
             return dm
 
+    @with_login_session()
     async def download_patrolmodel(self, *, ca_uuid: str = None):
+      
         async with self._session.stream(
                 "GET",
                 f'{self.api}/api/metadata/patrol/{ca_uuid}',
-                auth=self.auth,
                 headers={
                     'accept': 'application/json',
                 },
@@ -323,11 +367,12 @@ class AsyncSmartClient:
             pm = PatrolDataModel.parse_obj(ca_patrolmodel.json())
             return pm
 
+    @with_login_session()
     async def download_missionmodel(self, *, ca_uuid: str = None):
+    
         async with self._session.stream(
                 "GET",
                 f'{self.api}/api/metadata/mission/{ca_uuid}',
-                auth=self.auth,
                 headers={
                     'accept': 'application/json',
                 },
@@ -348,10 +393,11 @@ class AsyncSmartClient:
             'patrol_leg_uuid': str(uuid.uuid4())
         })
 
+    @with_login_session()
     async def get_patrol(self, *, patrol_id=None):
+
         response = await self._session.get(
             f'{self.api}/api/query/custom/patrol',
-            auth=self.auth,
             params={"client_patrol_uuid": patrol_id},
         )
 
@@ -359,10 +405,11 @@ class AsyncSmartClient:
             patrol = parse_obj_as(List[Patrol], json_response)[0]
             return patrol
 
+    @with_login_session()
     async def get_patrol_waypoints(self, *, patrol_id=None):
+
         response = await self._session.get(
             f'{self.api}/api/query/custom/waypoint/patrol',
-            auth=self.auth,
             params={"client_patrol_uuid": patrol_id},
         )
 
@@ -370,11 +417,12 @@ class AsyncSmartClient:
             smart_response = parse_obj_as(List[SMARTResponse], json_response)
             return [item.properties.waypoint for item in smart_response]
 
+    @with_login_session()
     async def get_incident(self, *, incident_uuid=None):
+
         url = f'{self.api}/api/query/custom/waypoint/incident'
         response = await self._session.get(
             url,
-            auth=self.auth,
             params={"client_incident_uuid": incident_uuid},
         )
 
@@ -392,9 +440,11 @@ class AsyncSmartClient:
         ts = ts or datetime.now(tz=pytz.utc)
         return '/'.join((prefix, device_id, ts.strftime('%Y/%m')))
 
+    @with_login_session()
     async def post_smart_request(self, *, json: Union[dict, str], ca_uuid: str = None):
+    
         url = f'{self.api}/api/data/{ca_uuid}'
-        kwargs = {"auth": self.auth}
+        kwargs = {}
         # json payload can be provided as a dict or as a json string
         if isinstance(json, dict):
             kwargs["json"] = json
@@ -433,8 +483,10 @@ class AsyncSmartClient:
         return response.json()
 
     # Functions for quick testing
+    @with_login_session()
     async def add_patrol_trackpoint(self, *, ca_uuid: str = None, patrol_uuid: str = None,
                                     patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
+
         track_point = {
             "type": "Feature",
             "geometry": {
@@ -456,13 +508,13 @@ class AsyncSmartClient:
         response = await self._session.post(
             f'{self.api}/api/data/{ca_uuid}',
             json=track_point,
-            auth=self.auth,
         )
 
         if response.is_success:
             print('All good mate!')
         print(response.status_code, response.content)
 
+    @with_login_session()
     async def add_patrol_waypoint(self, *, ca_uuid: str = None, patrol_uuid: str = None,
                                   patrol_leg_uuid: str = None,
                                   x=None, y=None, timestamp=None):
@@ -487,7 +539,6 @@ class AsyncSmartClient:
         response = await self._session.post(
             f'{self.api}/api/data/{ca_uuid}',
             json=way_point,
-            auth=self.auth,
         )
 
         if response.is_success:
@@ -495,12 +546,13 @@ class AsyncSmartClient:
         print(response.status_code, response.content)
 
     # TODO: Depreciate can just use post_smart_request
+    @with_login_session()
     async def add_independent_incident(self, *, incident: models.SMARTRequest, ca_uuid: str = None):
 
         response = await self._session.post(
             f'{self.api}/api/data/{ca_uuid}',
             json=incident.json(),
-            auth=self.auth,
+
         )
 
         if response.is_success:
@@ -511,6 +563,7 @@ class AsyncSmartClient:
 
         logger.debug(response.status_code, response.content)
 
+    @with_login_session()
     async def add_mission(self, *, ca_uuid: str = None):
 
         present = datetime.now(tz=pytz.utc)
@@ -549,8 +602,7 @@ class AsyncSmartClient:
 
         response = await self._session.post(
             f'{self.api}/api/data/{ca_uuid}',
-            json=track_point,
-            auth=self.auth,
+            json=track_point
         )
 
         if response.is_success:
