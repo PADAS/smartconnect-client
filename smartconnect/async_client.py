@@ -2,12 +2,14 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import List, Optional, Union
+from typing import List, Union
+from functools import wraps
 
 import pytz
 import httpx
 from pydantic import parse_obj_as
 
+from .exceptions import SMARTClientException
 from smartconnect import models, cache, smart_settings, data
 
 logger = logging.getLogger(__name__)
@@ -18,11 +20,6 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
 DEFAULT_TIMEOUT = (smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT, smart_settings.SMART_DEFAULT_TIMEOUT)
 
 
-class SMARTClientException(Exception):
-    pass
-
-
-from functools import wraps
 def with_login_session():
 
     def decorator(func):

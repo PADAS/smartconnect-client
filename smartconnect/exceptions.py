@@ -1,0 +1,2 @@
+class SMARTClientException(Exception):
+    pass

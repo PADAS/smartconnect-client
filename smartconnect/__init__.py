@@ -11,6 +11,7 @@ from pydantic.main import BaseModel
 from requests.auth import HTTPBasicAuth
 
 from smartconnect import models, cache, smart_settings, data
+from .exceptions import SMARTClientException
 from .async_client import AsyncSmartClient
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,6 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
 __version__ = '1.5.1'
 
 DEFAULT_TIMEOUT = (smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT, smart_settings.SMART_DEFAULT_TIMEOUT)
-
-
-class SMARTClientException(Exception):
-    pass
 
 class SmartClient:
 
