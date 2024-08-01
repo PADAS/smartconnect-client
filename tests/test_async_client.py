@@ -6,8 +6,15 @@ from typing import List
 
 from smartconnect import DataModel, models
 
+# login_mock is for the requests to initiate a session and authenticate.
+login_mock = respx.mock(base_url="https://smarttestserverconnect.smartconservationtools.org/server", assert_all_called=True)
+# api_mock.get("/baz/", name="baz").mock(
+#     return_value=httpx.Response(200, json={"name": "baz"}),)
+login_mock.post('/j_security_check').respond(status_code=200)
+login_mock.get('/connect/home').respond(status_code=200)
 
 @pytest.mark.asyncio
+@login_mock
 async def test_get_data_model(
         client_settings, smart_client, smart_ca_uuid, datamodel_response,
         mocker, mock_cache
@@ -32,6 +39,7 @@ async def test_get_data_model(
 
 
 @pytest.mark.asyncio
+@login_mock
 async def test_get_conservation_area(
         client_settings, smart_client, smart_ca_uuid, cas_response,
         mocker, mock_cache
@@ -51,6 +59,7 @@ async def test_get_conservation_area(
 
 
 @pytest.mark.asyncio
+@login_mock
 async def test_get_incident_with_invalid_id(
         client_settings, smart_client, smart_ca_uuid, incident_response_400,
         mocker, mock_cache
@@ -70,6 +79,7 @@ async def test_get_incident_with_invalid_id(
 
 
 @pytest.mark.asyncio
+@login_mock
 async def test_post_smart_request_incident(
         client_settings, smart_client, smart_ca_uuid, new_incident_response
 ):
@@ -112,6 +122,7 @@ async def test_post_smart_request_incident(
 
 
 @pytest.mark.asyncio
+@login_mock
 async def test_post_smart_request_patrol(
         client_settings, smart_client, smart_ca_uuid, new_patrol_response
 ):
@@ -132,6 +143,7 @@ async def test_post_smart_request_patrol(
 
 
 @pytest.mark.asyncio
+@login_mock
 async def test_post_smart_request_track_point(
         client_settings, smart_client, smart_ca_uuid, new_track_point_response
 ):
