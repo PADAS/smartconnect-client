@@ -3,12 +3,12 @@ import logging
 import uuid
 from datetime import datetime
 from typing import List, Optional
+from functools import wraps
 
 import pytz
 import requests
 from pydantic import parse_obj_as
 from pydantic.main import BaseModel
-from requests.auth import HTTPBasicAuth
 
 from smartconnect import models, cache, smart_settings, data
 from .exceptions import SMARTClientException
@@ -24,28 +24,58 @@ __version__ = '1.5.1'
 
 DEFAULT_TIMEOUT = (smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT, smart_settings.SMART_DEFAULT_TIMEOUT)
 
+
+def with_login_session():
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            self.ensure_login()
+            return func(self, *args, **kwargs)
+        return wrapper
+    return decorator
 class SmartClient:
 
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
-    def __init__(self, *args, api=None, username=None, password=None, use_language_code='en', version="7.5"):
-
-        assert not args, "This function does not accept positional arguments"
+    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5"):
 
         self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
         self.password = password
-        self.auth=HTTPBasicAuth(self.username, self.password)
         self.use_language_code=use_language_code
         self.version=version
 
         self.logger = logging.getLogger(SmartClient.__name__)
         self.verify_ssl = smart_settings.SMART_SSL_VERIFY
 
+        self._session = requests.Session()
+
+    def ensure_login(self):
+        '''
+        Login flow for SMART Connect. If the session already has a JSESSIONID cookie, it is assumed to be logged in.
+        '''
+        for k, v in self._session.cookies.items():
+            if k == 'JSESSIONID' and v:
+                return self._session
+        
+        # Request the landing page to prime the session.
+        landing_page = self._session.get(f'{self.api}/connect/home')
+        if not landing_page.ok:
+            raise SMARTClientException(f"Failed to retrieve landing page. Status code: {landing_page.status_code}")
+        
+        login_result = self._session.post(f'{self.api}/j_security_check',
+                                          data={"j_username": self.username, "j_password": self.password})
+
+        if login_result.ok or login_result.is_redirect:
+            return self._session
+        
+        raise SMARTClientException(f"Failed to login to SMART Connect. Status code: {login_result.status_code}")
+    
+    @with_login_session()
     def get_server_api_info(self):
-        cas = requests.get(f'{self.api}/api/info',
-                           auth=self.auth,
+        cas = self._session.get(f'{self.api}/api/info',
                            headers={
                                'accept': 'application/json',
                            },
@@ -56,9 +86,8 @@ class SmartClient:
         if cas.ok:
             return SmartConnectApiInfo.parse_obj(cas.json())
 
-    def get_conservation_area(self, *args, ca_uuid: str = None, force: bool = False):
-
-        assert not args, "This function does not accept positional arguments"
+    @with_login_session()
+    def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
         if not force:
@@ -107,9 +136,9 @@ class SmartClient:
             )
             raise SMARTClientException(f"Failed to get SMART Conservation Areas") from ex
 
+    @with_login_session()
     def get_conservation_areas(self) -> List[models.ConservationArea]:
-        cas = requests.get(f'{self.api}/api/conservationarea',
-                            auth=self.auth,
+        cas = self._session.get(f'{self.api}/api/conservationarea',
                             headers={
                                 'accept': 'application/json',
                             },
@@ -122,9 +151,9 @@ class SmartClient:
 
         return [models.ConservationArea.parse_obj(ca) for ca in cas]
 
-    def list_configurable_datamodels(self, *args, ca_uuid: str):
+    @with_login_session()
+    def list_configurable_datamodels(self, *, ca_uuid: str):
 
-        assert not args, "Only keyword arguments"
         assert ca_uuid, "ca_uuid is required"
         '''
         Get metadata about the configurable data models for a given CA.
@@ -134,8 +163,7 @@ class SmartClient:
         extra_dict = dict(ca_uuid=ca_uuid,
                           url=f'{self.api}/metadata/configurablemodel')
 
-        config_datamodels = requests.get(f'{self.api}/api/metadata/configurablemodel',
-                                        auth=self.auth,
+        config_datamodels = self._session.get(f'{self.api}/api/metadata/configurablemodel',
                                         params={"ca_uuid": ca_uuid},
                                         headers={
                                             'accept': 'application/json',
@@ -160,15 +188,13 @@ class SmartClient:
         cdms = config_datamodels.json()
         return cdms
 
-    def download_configurable_datamodel(self, *args, cm_uuid: str = None):
-
-        assert not args, "Only keyword arguments are allowed"
+    @with_login_session()
+    def download_configurable_datamodel(self, *, cm_uuid: str = None):
 
         extra_dict = dict(cm_uuid=cm_uuid,
                           url=f'{self.api}/api/metadata/configurablemodel/{cm_uuid}')
 
-        config_datamodel = requests.get(f'{self.api}/api/metadata/configurablemodel/{cm_uuid}',
-                                    auth=self.auth,
+        config_datamodel = self._session.get(f'{self.api}/api/metadata/configurablemodel/{cm_uuid}',
                                     headers={
                                         'accept': 'application/xml',
                                     },
@@ -193,11 +219,10 @@ class SmartClient:
         
         return cdm
 
-    def get_configurable_data_model(self, *args, cm_uuid: str = None, force: bool = False):
+    @with_login_session()
+    def get_configurable_data_model(self, *, cm_uuid: str = None, force: bool = False):
         # TODO: version consideration
         # TODO: Implement caching
-
-        assert not args, "Only keyword arguments are allowed"
 
         ca_uuid = 'na'
         cache_key = f'cache:smart-ca:{ca_uuid}:cdm:{cm_uuid}'
@@ -225,9 +250,7 @@ class SmartClient:
         cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
         return ca_config_datamodel
 
-    def get_data_model(self, *args, ca_uuid: str = None, force: bool = False):
-
-        assert not args, "get_data_model() takes no positional arguments."
+    def get_data_model(self, *, ca_uuid: str = None, force: bool = False):
 
         # CA Data Model is not available for versions below 7. Use a blank data model.
         if self.version.startswith("6"):
@@ -268,15 +291,13 @@ class SmartClient:
 
         return ca_datamodel
 
-    def download_datamodel(self, *args, ca_uuid: str = None):
-
-        assert not args, "Only keyword arguments are allowed"
+    @with_login_session()
+    def download_datamodel(self, *, ca_uuid: str = None):
 
         extra_dict = dict(ca_uuid=ca_uuid,
                           url=f'{self.api}/api/metadata/datamodel/{ca_uuid}')
 
-        ca_datamodel = requests.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
-                                    auth=self.auth,
+        ca_datamodel = self._session.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
                                     headers={
                                         'accept': 'application/xml',
                                     },
@@ -300,9 +321,7 @@ class SmartClient:
         dm.load(ca_datamodel.text)
         return dm
 
-    def load_datamodel(self, *args, filename=None):
-
-        assert not args, "Only keyword arguments are allowed"
+    def load_datamodel(self, *, filename=None):
 
         with open(filename, 'r') as fi:
             contents = fi.read()
@@ -310,13 +329,11 @@ class SmartClient:
             dm = DataModel(use_language_code=self.use_language_code)
             dm.load(contents)
             return dm
-        
-    def download_patrolmodel(self, *args, ca_uuid: str = None):
 
-        assert not args, "Only keyword arguments are allowed"
+    @with_login_session()    
+    def download_patrolmodel(self, *, ca_uuid: str = None):
 
-        ca_patrolmodel = requests.get(f'{self.api}/api/metadata/patrol/{ca_uuid}',
-            auth=self.auth,
+        ca_patrolmodel = self._session.get(f'{self.api}/api/metadata/patrol/{ca_uuid}',
             headers={
                 'accept': 'application/json',
             },
@@ -334,12 +351,10 @@ class SmartClient:
         pm = PatrolDataModel.parse_obj(ca_patrolmodel.json())
         return pm
 
-    def download_missionmodel(self, *args, ca_uuid: str = None):
+    @with_login_session()
+    def download_missionmodel(self, *, ca_uuid: str = None):
 
-        assert not args, "Only keyword arguments are allowed"
-
-        ca_missionmodel = requests.get(f'{self.api}/api/metadata/mission/{ca_uuid}',
-            auth=self.auth,
+        ca_missionmodel = self._session.get(f'{self.api}/api/metadata/mission/{ca_uuid}',
             headers={
                 'accept': 'application/json',
             },
@@ -358,20 +373,17 @@ class SmartClient:
         with open('_missionmodel.json', 'w') as fo:
             fo.write(ca_missionmodel.text)
 
-    def get_patrol_ids(self, *args, device_id=None):
-
-        assert not args, "get_patrol_ids() takes no positional arguments."
+    def get_patrol_ids(self, *, device_id=None):
 
         return self.patrol_id_map.setdefault(device_id, {
             'patrol_uuid': str(uuid.uuid4()),
             'patrol_leg_uuid': str(uuid.uuid4())
         })
 
-    def get_patrol(self, *args, patrol_id=None):
-        assert not args, "get_patrol() takes no positional arguments."
+    @with_login_session()
+    def get_patrol(self, *, patrol_id=None):
 
-        response = requests.get(f'{self.api}/api/query/custom/patrol',
-                                 auth=self.auth,
+        response = self._session.get(f'{self.api}/api/query/custom/patrol',
                                  params= {"client_patrol_uuid": patrol_id},
                                  verify=self.verify_ssl,
                                  timeout=DEFAULT_TIMEOUT)
@@ -380,11 +392,10 @@ class SmartClient:
             patrol = parse_obj_as(List[Patrol],response.json())[0]
             return patrol
 
-    def get_patrol_waypoints(self, *args, patrol_id=None):
-        assert not args, "get_patrol_waypoints() takes no positional arguments."
+    @with_login_session()
+    def get_patrol_waypoints(self, *, patrol_id=None):
 
-        response = requests.get(f'{self.api}/api/query/custom/waypoint/patrol',
-                                 auth=self.auth,
+        response = self._session.get(f'{self.api}/api/query/custom/waypoint/patrol',
                                  params= {"client_patrol_uuid": patrol_id},
                                  verify=self.verify_ssl,
                                  timeout=DEFAULT_TIMEOUT)
@@ -393,12 +404,11 @@ class SmartClient:
             smart_response = parse_obj_as(List[SMARTResponse],response.json())
             return [item.properties.waypoint for item in smart_response]
 
+    @with_login_session()
+    def get_incident(self, *, incident_uuid=None):
 
-    def get_incident(self, *args, incident_uuid=None):
-        assert not args, "get_incident() takes no positional arguments."
         url = f'{self.api}/api/query/custom/waypoint/incident'
-        response = requests.get(url,
-                                auth=self.auth,
+        response = self._session.get(url,
                                 params={"client_incident_uuid": incident_uuid},
                                 verify=self.verify_ssl,
                                 timeout=DEFAULT_TIMEOUT)
@@ -413,20 +423,19 @@ class SmartClient:
         if response_data and isinstance(response_data, list):
             return parse_obj_as(List[SMARTResponse], response_data)
 
-    def generate_patrol_label(self, *args, device_id=None, prefix='wildlife', ts=None):
-        assert not args, "generate_patrol_label() takes no positional arguments."
+    def generate_patrol_label(self, *, device_id=None, prefix='wildlife', ts=None):
+
         ts = ts or datetime.now(tz=pytz.utc)
 
         return '/'.join( (prefix, device_id, ts.strftime('%Y/%m')) )
 
-    def post_smart_request(self, *args, json: str, ca_uuid: str = None):
-        assert not args, "post_smart_request() takes no positional arguments."
+    @with_login_session()
+    def post_smart_request(self, *, json: str, ca_uuid: str = None):
 
         url = f'{self.api}/api/data/{ca_uuid}'
-        response = requests.post(url,
+        response = self._session.post(url,
                                  headers={'content-type': 'application/json'},
                                  data=json,
-                                 auth=self.auth,
                                  timeout=DEFAULT_TIMEOUT,
                                  verify=self.verify_ssl)
         if response.ok:
@@ -448,8 +457,9 @@ class SmartClient:
             raise SMARTClientException(message)
         
     # Functions for quick testing
-    def add_patrol_trackpoint(self, *args, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
-        assert not args, "add_patrol_trackpoint() takes no positional arguments."
+    @with_login_session()
+    def add_patrol_trackpoint(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None, x=None, y=None, timestamp=None):
+
         track_point = {
             "type": "Feature",
             "geometry": {
@@ -468,18 +478,18 @@ class SmartClient:
             }
         }
 
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+        response = self._session.post(f'{self.api}/api/data/{ca_uuid}',
                                  json=track_point,
-                                 auth=self.auth,
                                  verify=self.verify_ssl)
 
         if response.ok:
             print('All good mate!')
         print(response.status_code, response.content)
 
-    def add_patrol_waypoint(self, *args, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None,
+    @with_login_session()
+    def add_patrol_waypoint(self, *, ca_uuid: str = None, patrol_uuid: str = None, patrol_leg_uuid: str = None,
                               x=None, y=None, timestamp=None):
-        assert not args, "add_patrol_waypoint() takes no positional arguments."
+
         way_point = {
             "type": "Feature",
             "geometry": {
@@ -498,20 +508,21 @@ class SmartClient:
             }
         }
 
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+        response = self._session.post(f'{self.api}/api/data/{ca_uuid}',
                                  json=way_point,
-                                 auth=self.auth,
                                  verify=self.verify_ssl)
 
         if response.ok:
             print('All good mate!')
         print(response.status_code, response.content)
-    # TODO: Depreciate can just use post_smart_request
-    def add_independent_incident(self, *args, incident: models.SMARTRequest, ca_uuid: str = None):
-        assert not args, "add_independent_incident() takes no positional arguments."
 
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
-            data=incident.json(), auth=self.auth, timeout=(3.1, 10), verify=self.verify_ssl)
+
+    # TODO: Depreciate can just use post_smart_request
+    @with_login_session()
+    def add_independent_incident(self, *, incident: models.SMARTRequest, ca_uuid: str = None):
+
+        response = self._session.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
+            data=incident.json(), timeout=(3.1, 10), verify=self.verify_ssl)
 
         if response.ok:
             print('All good mate!')
@@ -521,8 +532,9 @@ class SmartClient:
 
         logger.debug(response.status_code, response.content)
 
-    def add_mission(self, *args, ca_uuid: str = None):
-        assert not args, "add_mission() takes no positional arguments."
+    @with_login_session()
+    def add_mission(self, *, ca_uuid: str = None):
+
         present = datetime.now(tz=pytz.utc)
 
         mission_uuid = str(uuid.uuid4())
@@ -558,10 +570,8 @@ class SmartClient:
         }
 
 
-
-        response = requests.post(f'{self.api}/api/data/{ca_uuid}',
+        response = self._session.post(f'{self.api}/api/data/{ca_uuid}',
                                  json=track_point,
-                                 auth=self.auth,
                                  verify=self.verify_ssl)
 
         if response.ok:
