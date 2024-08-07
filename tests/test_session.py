@@ -2,7 +2,7 @@ import pytest
 import requests, requests_mock
 from smartconnect import SmartClient, SMARTClientException
 
-def test_async_client_login(requests_mock):
+def test_client_login(requests_mock):
     # Mock the login response
     requests_mock.post("https://fancyplace.smartconservationtools.org/server/j_security_check", status_code=200)
 
