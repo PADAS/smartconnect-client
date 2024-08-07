@@ -1,43 +1,35 @@
 import pytest
-import respx
-import httpx
-from smartconnect import AsyncSmartClient, SMARTClientException
+import requests, requests_mock
+from smartconnect import SmartClient, SMARTClientException
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_async_client_login():
+def test_client_login(requests_mock):
     # Mock the login response
-    respx.post(
-        "https://fancyplace.smartconservationtools.org/server/j_security_check"
-    ).respond(status_code=200)
+    requests_mock.post("https://fancyplace.smartconservationtools.org/server/j_security_check", status_code=200)
 
-    respx.get(
-        "https://fancyplace.smartconservationtools.org/server/connect/home").respond(status_code=200)
+    requests_mock.get(
+        "https://fancyplace.smartconservationtools.org/server/connect/home", status_code=200)
 
-    smart_client = AsyncSmartClient(
+    smart_client = SmartClient(
         api="https://fancyplace.smartconservationtools.org/server",
         username="Earthranger",
         password="afancypassword"
     )
 
     # Perform the login
-    session = await smart_client.ensure_login()
+    session = smart_client.ensure_login()
 
     # Check if login was successful
     assert session is not None
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_async_client_login_negative():
+def test_client_login_negative(requests_mock):
     # Mock the login response
-    respx.post(
-        "https://fancyplace.smartconservationtools.org/server/j_security_check"
-    ).respond(status_code=401)
+    requests_mock.post(
+        "https://fancyplace.smartconservationtools.org/server/j_security_check", status_code=401)
 
-    respx.get(
-        "https://fancyplace.smartconservationtools.org/server/connect/home").respond(status_code=200)
+    requests_mock.get(
+        "https://fancyplace.smartconservationtools.org/server/connect/home", status_code=200)
 
-    smart_client = AsyncSmartClient(
+    smart_client = SmartClient(
         api="https://fancyplace.smartconservationtools.org/server",
         username="Earthranger",
         password="afancypassword"
@@ -46,4 +38,4 @@ async def test_async_client_login_negative():
     
     with pytest.raises(SMARTClientException):
         # Perform the login
-        await smart_client.ensure_login()
+        smart_client.ensure_login()
