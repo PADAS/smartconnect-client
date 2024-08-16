@@ -11,7 +11,7 @@ from pydantic import parse_obj_as
 from pydantic.main import BaseModel
 
 from smartconnect import models, cache, smart_settings, data
-from .exceptions import SMARTClientException
+from .exceptions import SMARTClientException, SMARTClientServerError, SMARTClientClientError, SMARTClientServerUnreachableError, SMARTClientUnauthorizedError
 from .async_client import AsyncSmartClient
 
 logger = logging.getLogger(__name__)
@@ -63,15 +63,20 @@ class SmartClient:
         # Request the landing page to prime the session.
         landing_page = self._session.get(f'{self.api}/connect/home')
         if not landing_page.ok:
-            raise SMARTClientException(f"Failed to retrieve landing page. Status code: {landing_page.status_code}")
+            raise SMARTClientServerUnreachableError(f"Failed to retrieve landing page {landing_page.url}. Status code: {landing_page.status_code}")
         
         login_result = self._session.post(f'{self.api}/j_security_check',
                                           data={"j_username": self.username, "j_password": self.password})
 
         if login_result.ok or login_result.is_redirect:
             return self._session
+
+        if login_result.status_code == 401:
+            raise SMARTClientUnauthorizedError(f"Failed to login to SMART Connect {login_result.url}. Status code: {login_result.status_code}")
         
-        raise SMARTClientException(f"Failed to login to SMART Connect. Status code: {login_result.status_code}")
+        logger.error(f"Failed to login to SMART Connect {login_result.url}. Status code: {login_result.status_code}, {login_result.text[:250]}")
+        exception_class = SMARTClientClientError if login_result.status_code < 500 else SMARTClientServerError
+        raise exception_class(f"Failed to login to SMART Connect {login_result.url}. Status code: {login_result.status_code}")
     
     @with_login_session()
     def get_server_api_info(self):

@@ -1,7 +1,8 @@
 import pytest
 import respx
 import httpx
-from smartconnect import AsyncSmartClient, SMARTClientException
+from smartconnect import *
+from smartconnect.exceptions import SMARTClientServerUnreachableError, SMARTClientUnauthorizedError
 
 @pytest.mark.asyncio
 @respx.mock
@@ -43,7 +44,26 @@ async def test_async_client_login_negative():
         password="afancypassword"
     )
 
-    
-    with pytest.raises(SMARTClientException):
+    with pytest.raises(SMARTClientUnauthorizedError):
         # Perform the login
         await smart_client.ensure_login()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_client_landing_page_server500():
+
+    # Given a smart connect server is not reachable.
+    respx.get(
+        "https://fancyplace.smartconservationtools.org/server/connect/home").respond(status_code=500)
+
+    smart_client = AsyncSmartClient(
+        api="https://fancyplace.smartconservationtools.org/server",
+        username="Earthranger",
+        password="afancypassword"
+    )
+
+    with pytest.raises(SMARTClientServerUnreachableError):
+        # Perform the login
+        await smart_client.ensure_login()
+
