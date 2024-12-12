@@ -51,14 +51,11 @@ class EarthRangerReaderState(pydantic.BaseModel):
 
 
 def is_leaf_node(*, node_paths=None, cur_node=None):
-    is_leaf = True
-    for path in node_paths:
-        # determine if current path is subset of any category path
-        if cur_node in path and len(path) > len(cur_node) and '.' in path:
-            is_leaf = False
-            break
-    return is_leaf
 
+    looking_for = f'{cur_node}.'
+    found = next((x.startswith(looking_for) for x in node_paths), False)
+
+    return found is False
 
 def build_earthranger_event_types(*, dm: dict, ca_uuid: str, ca_identifier: str, cdm: dict = None):
     """Builds EarthRanger Event Types from SMART CA data model or configurable data model if provided"""

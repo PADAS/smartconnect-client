@@ -344,12 +344,18 @@ class DataModel:
                 }
 
     def resolve_display(self, items, language_code='en'):
-        for item in items:
-            if item['language_code'] == language_code:
-                return item['value']
-        else:
-            return 'n/a'
+        return resolve_display(items, language_codes=[language_code])        
 
+def resolve_display(items, language_codes:list=None):
+
+    # A reasonable default list for language codes
+    language_codes = language_codes or ['en', 'fr', 'es']
+    val = next((item['value'] for item in items for language_code in language_codes if item['language_code'] == language_code), None)
+
+    # Fall back to English.
+    if not val and 'en' not in language_codes:
+        val = next((item['value'] for item in items if item['language_code'] == 'en'), None)
+    return val or 'n/a'
 
 class ConfigurableDataModel:
 
@@ -448,8 +454,4 @@ class ConfigurableDataModel:
 
     @staticmethod
     def resolve_display(items, language_code='en'):
-        for item in items:
-            if item['language_code'] == language_code:
-                return item['value']
-        else:
-            return 'n/a'
+        return resolve_display(items, language_code=language_code)
