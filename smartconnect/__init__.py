@@ -490,7 +490,7 @@ class SmartClient:
     def add_independent_incident(self, *, incident: models.SMARTRequest, ca_uuid: str = None):
 
         response = self._session.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
-            data=incident.json())
+            content=incident.json())
 
         if response.is_success:
             print('All good mate!')

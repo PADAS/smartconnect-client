@@ -454,7 +454,7 @@ class TestSmartClientAPICalls:
         mock_post.assert_called_once_with(
             f'https://test.example.com/api/data/{ca_uuid}',
             headers={'content-type': 'application/json'},
-            data=json.dumps(request_data)
+            content=json.dumps(request_data)
         )
     
     @patch.object(SmartClient, 'ensure_login')

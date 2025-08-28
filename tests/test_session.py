@@ -46,6 +46,10 @@ def test_async_client_landing_page_server500(respx_mock):
     respx_mock.get(
         "https://fancyplace.smartconservationtools.org/server/connect/home").mock(return_value=respx.MockResponse(500))
 
+    # Also mock the login request in case it gets called (though it shouldn't)
+    respx_mock.post(
+        "https://fancyplace.smartconservationtools.org/server/j_security_check").mock(return_value=respx.MockResponse(401))
+
     smart_client = SmartClient(
         api="https://fancyplace.smartconservationtools.org/server",
         username="Earthranger",
