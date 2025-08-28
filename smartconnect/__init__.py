@@ -407,7 +407,7 @@ class SmartClient:
         url = f'{self.api}/api/data/{ca_uuid}'
         response = self._session.post(url,
                                  headers={'content-type': 'application/json'},
-                                 data=json)
+                                 content=json)
         if response.is_success:
             logger.info("Posted request to SMART successfully")
             if logger.isEnabledFor(logging.DEBUG):
