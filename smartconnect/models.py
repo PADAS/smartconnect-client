@@ -4,7 +4,7 @@ from datetime import datetime, date
 from typing import List, Any, Optional, Union
 
 import untangle
-from pydantic import BaseModel, Field, parse_obj_as, validator
+from pydantic import BaseModel, Field, parse_obj_as, validator, ValidationError
 
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
@@ -12,6 +12,8 @@ SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 class CategoryAttribute(BaseModel):
     key: str
     is_active: bool = Field(alias="isactive", default=True)
+    class Config:
+        allow_population_by_field_name = True
 
 class Category(BaseModel):
     path: str
@@ -21,11 +23,16 @@ class Category(BaseModel):
     is_active: Optional[bool] = Field(alias="isactive", default=True)
     attributes: Optional[List[CategoryAttribute]]
 
+    class Config:
+        allow_population_by_field_name = True
+
 
 class AttributeOption(BaseModel):
     key: str
     display: str
     is_active: Optional[bool] = Field(alias="isActive", default=True)
+    class Config:
+        allow_population_by_field_name = True
 
 class Attribute(BaseModel):
     key: str
@@ -34,6 +41,8 @@ class Attribute(BaseModel):
     display: str
     options: Optional[List[AttributeOption]]
 
+    class Config:
+        allow_population_by_field_name = True
 
 class TransformationRule(BaseModel):
     match_pattern: dict
@@ -45,10 +54,9 @@ class SmartObservation(BaseModel):
     category: str
     attributes: dict
 
-    validator("observationUuid")
+    @validator("observationUuid")
     def clean_observationUuid(cls, val):
-        
-	# TODO: Redress to make observationUuid a UUID field.
+        # TODO: Redress to make observationUuid a UUID field.
         if val == 'None':
             return None
         return val
@@ -60,6 +68,12 @@ class SmartObservationGroup(BaseModel):
 
 class Geometry(BaseModel):
     coordinates: List[float] = Field(..., max_item=2, min_items=2)
+
+    @validator("coordinates")
+    def clean_coordinates(cls, val):
+        if len(val) != 2:
+            raise ValidationError("Coordinates must have at least 2 elements")
+        return val
 
 
 class File(BaseModel):
@@ -150,21 +164,31 @@ class SMARTResponseProperties(BaseModel):
     patrol_leg: Optional[PatrolLeg]
     waypoint: Optional[Waypoint]
 
+    class Config:
+        allow_population_by_field_name = True
+
 
 class SMARTResponse(BaseModel):
     type: str = 'Feature'
     geometry: Geometry
     properties: SMARTResponseProperties
 
+    class Config:
+        allow_population_by_field_name = True
+
 
 class Names(BaseModel):
     name: str
     locale: Optional[str]
+    class Config:
+        allow_population_by_field_name = True
 
 
 class ListOptions(BaseModel):
     id: str
     names: List[Names]
+    class Config:
+        allow_population_by_field_name = True
 
 
 class PatrolMetaData(BaseModel):
@@ -173,10 +197,14 @@ class PatrolMetaData(BaseModel):
     requiredWhen: Optional[str] = 'False'
     listOptions: Optional[List[ListOptions]] = None
     type: str
+    class Config:
+        allow_population_by_field_name = True
 
 
 class PatrolDataModel(BaseModel):
     patrolMetadata: List[PatrolMetaData]
+    class Config:
+        allow_population_by_field_name = True
 
 
 class ConservationArea(BaseModel):
@@ -193,6 +221,8 @@ class ConservationArea(BaseModel):
     caBoundaryJson: Optional[str] = Field(None, description='A string containing GeoJSON')
     administrativeAreasJson: Optional[Any]
     uuid: uuid.UUID
+    class Config:
+        allow_population_by_field_name = True
 
 class SmartConnectApiInfo(BaseModel):
     build_date: str = Field(None, alias='build-date')
@@ -200,6 +230,8 @@ class SmartConnectApiInfo(BaseModel):
     db_last_updated: str = Field(None, alias='db-last-updated')
     file_store_version: str = Field(None, alias='file-store-version')
     db_version: str = Field(None, alias='db-version')
+    class Config:
+        allow_population_by_field_name = True
 
 
 class SMARTCompositeRequest(BaseModel):
@@ -454,4 +486,4 @@ class ConfigurableDataModel:
 
     @staticmethod
     def resolve_display(items, language_code='en'):
-        return resolve_display(items, language_code=language_code)
+        return resolve_display(items, language_codes=[language_code])

@@ -389,12 +389,6 @@ class AsyncSmartClient:
             with open('_missionmodel.json', 'w') as fo:
                 fo.write(ca_missionmodel.text)
 
-    def get_patrol_ids(self, *, device_id=None):
-        return self.patrol_id_map.setdefault(device_id, {
-            'patrol_uuid': str(uuid.uuid4()),
-            'patrol_leg_uuid': str(uuid.uuid4())
-        })
-
     @with_login_session()
     async def get_patrol(self, *, patrol_id=None):
 

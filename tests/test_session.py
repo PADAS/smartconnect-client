@@ -1,13 +1,13 @@
 import pytest
-import requests, requests_mock
+import respx
 from smartconnect import SmartClient, SMARTClientException, SMARTClientUnauthorizedError, SMARTClientServerUnreachableError
 
-def test_client_login(requests_mock):
+def test_client_login(respx_mock):
     # Mock the login response
-    requests_mock.post("https://fancyplace.smartconservationtools.org/server/j_security_check", status_code=200)
+    respx_mock.post("https://fancyplace.smartconservationtools.org/server/j_security_check").mock(return_value=respx.MockResponse(200))
 
-    requests_mock.get(
-        "https://fancyplace.smartconservationtools.org/server/connect/home", status_code=200)
+    respx_mock.get(
+        "https://fancyplace.smartconservationtools.org/server/connect/home").mock(return_value=respx.MockResponse(200))
 
     smart_client = SmartClient(
         api="https://fancyplace.smartconservationtools.org/server",
@@ -21,13 +21,13 @@ def test_client_login(requests_mock):
     # Check if login was successful
     assert session is not None
 
-def test_client_login_negative(requests_mock):
+def test_client_login_negative(respx_mock):
     # Mock the login response
-    requests_mock.post(
-        "https://fancyplace.smartconservationtools.org/server/j_security_check", status_code=401)
+    respx_mock.post(
+        "https://fancyplace.smartconservationtools.org/server/j_security_check").mock(return_value=respx.MockResponse(401))
 
-    requests_mock.get(
-        "https://fancyplace.smartconservationtools.org/server/connect/home", status_code=200)
+    respx_mock.get(
+        "https://fancyplace.smartconservationtools.org/server/connect/home").mock(return_value=respx.MockResponse(200))
 
     smart_client = SmartClient(
         api="https://fancyplace.smartconservationtools.org/server",
@@ -40,11 +40,15 @@ def test_client_login_negative(requests_mock):
         # Perform the login
         smart_client.ensure_login()
 
-def test_async_client_landing_page_server500(requests_mock):
+def test_async_client_landing_page_server500(respx_mock):
 
     # Given a smart connect server is not reachable.
-    requests_mock.get(
-        "https://fancyplace.smartconservationtools.org/server/connect/home", status_code=500)
+    respx_mock.get(
+        "https://fancyplace.smartconservationtools.org/server/connect/home").mock(return_value=respx.MockResponse(500))
+
+    # Also mock the login request in case it gets called (though it shouldn't)
+    respx_mock.post(
+        "https://fancyplace.smartconservationtools.org/server/j_security_check").mock(return_value=respx.MockResponse(401))
 
     smart_client = SmartClient(
         api="https://fancyplace.smartconservationtools.org/server",
