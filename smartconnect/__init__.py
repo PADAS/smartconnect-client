@@ -6,7 +6,7 @@ from typing import List, Optional
 from functools import wraps
 
 import pytz
-import requests
+import httpx
 from pydantic import parse_obj_as
 from pydantic.main import BaseModel
 
@@ -50,7 +50,14 @@ class SmartClient:
         self.logger = logging.getLogger(SmartClient.__name__)
         self.verify_ssl = smart_settings.SMART_SSL_VERIFY
 
-        self._session = requests.Session()
+        # Configure httpx client with timeout and retries
+        self.max_retries = smart_settings.SMART_DEFAULT_CONNECT_RETRIES
+        transport = httpx.HTTPTransport(retries=self.max_retries)
+        connect_timeout = smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT
+        data_timeout = smart_settings.SMART_DEFAULT_TIMEOUT
+        timeout = httpx.Timeout(data_timeout, connect=connect_timeout, pool=connect_timeout)
+        
+        self._session = httpx.Client(transport=transport, timeout=timeout, verify=self.verify_ssl)
 
     def ensure_login(self):
         '''
@@ -62,20 +69,20 @@ class SmartClient:
         
         # Request the landing page to prime the session.
         landing_page = self._session.get(f'{self.api}/connect/home')
-        if not landing_page.ok:
+        if not landing_page.is_success:
             raise SMARTClientServerUnreachableError(f"Failed to retrieve landing page {landing_page.url}. Status code: {landing_page.status_code}")
         
         login_result = self._session.post(f'{self.api}/j_security_check',
                                           data={"j_username": self.username, "j_password": self.password})
 
-        if login_result.ok or login_result.is_redirect:
+        if login_result.is_success or login_result.is_redirect:
             return self._session
 
         if login_result.status_code == 401:
             raise SMARTClientUnauthorizedError(f"Failed to login to SMART Connect {login_result.url}. Status code: {login_result.status_code}")
         
         logger.error(f"Failed to login to SMART Connect {login_result.url}. Status code: {login_result.status_code}, {login_result.text[:250]}")
-        exception_class = SMARTClientClientError if login_result.status_code < 500 else SMARTClientServerError
+        exception_class = SMARTClientClientError if login_result.is_client_error else SMARTClientServerError
         raise exception_class(f"Failed to login to SMART Connect {login_result.url}. Status code: {login_result.status_code}")
     
     @with_login_session()
@@ -83,12 +90,9 @@ class SmartClient:
         cas = self._session.get(f'{self.api}/api/info',
                            headers={
                                'accept': 'application/json',
-                           },
-                           verify=self.verify_ssl,
-                           timeout=DEFAULT_TIMEOUT
-                           )
+                           })
 
-        if cas.ok:
+        if cas.is_success:
             return SmartConnectApiInfo.parse_obj(cas.json())
 
     @with_login_session()
@@ -146,12 +150,9 @@ class SmartClient:
         cas = self._session.get(f'{self.api}/api/conservationarea',
                             headers={
                                 'accept': 'application/json',
-                            },
-                            verify=self.verify_ssl,
-                            timeout=DEFAULT_TIMEOUT
-                            )
+                            })
 
-        if cas.ok:
+        if cas.is_success:
             cas = cas.json()
 
         return [models.ConservationArea.parse_obj(ca) for ca in cas]
@@ -172,18 +173,13 @@ class SmartClient:
                                         params={"ca_uuid": ca_uuid},
                                         headers={
                                             'accept': 'application/json',
-                                        },
-                                        stream=True,
-                                        verify=self.verify_ssl,
-                                        timeout=DEFAULT_TIMEOUT)
-
-        config_datamodels.raw.decode_content = True
+                                        })
 
         self.logger.info(f'Get configurable data models for CA {ca_uuid} data model took {config_datamodels.elapsed.total_seconds()} seconds',
                          extra=dict(**extra_dict,
                                     status_code=config_datamodels.status_code))
 
-        if not config_datamodels.ok:
+        if not config_datamodels.is_success:
             self.logger.error(
                 f'Failed to download configurable datamodels for  CA {ca_uuid}. Status_code is: {config_datamodels.status_code}',
                 extra=dict(**extra_dict,
@@ -202,17 +198,13 @@ class SmartClient:
         config_datamodel = self._session.get(f'{self.api}/api/metadata/configurablemodel/{cm_uuid}',
                                     headers={
                                         'accept': 'application/xml',
-                                    },
-                                    stream=True,
-                                    verify=self.verify_ssl,
-                                    timeout=DEFAULT_TIMEOUT)
-        config_datamodel.raw.decode_content = True
+                                    })
 
         self.logger.info(f'Download configurable model {cm_uuid} data model took {config_datamodel.elapsed.total_seconds()} seconds',
                          extra=dict(**extra_dict,
                                     status_code=config_datamodel.status_code))
 
-        if not config_datamodel.ok:
+        if not config_datamodel.is_success:
             self.logger.error(
                 f'Failed to download data model for  configurable model {cm_uuid}. Status_code is: {config_datamodel.status_code}',
                 extra=dict(**extra_dict,
@@ -305,17 +297,13 @@ class SmartClient:
         ca_datamodel = self._session.get(f'{self.api}/api/metadata/datamodel/{ca_uuid}',
                                     headers={
                                         'accept': 'application/xml',
-                                    },
-                                    stream=True,
-                                    verify=self.verify_ssl,
-                                    timeout=DEFAULT_TIMEOUT)
-        ca_datamodel.raw.decode_content = True
+                                    })
 
         self.logger.info(f'Download CA {ca_uuid} data model took {ca_datamodel.elapsed.total_seconds()} seconds',
                          extra=dict(**extra_dict,
                                     status_code=ca_datamodel.status_code))
 
-        if not ca_datamodel.ok:
+        if not ca_datamodel.is_success:
             self.logger.error(
                 f'Failed to download data model for  CA {ca_uuid}. Status_code is: {ca_datamodel.status_code}',
                 extra=dict(**extra_dict,
@@ -341,15 +329,11 @@ class SmartClient:
         ca_patrolmodel = self._session.get(f'{self.api}/api/metadata/patrol/{ca_uuid}',
             headers={
                 'accept': 'application/json',
-            },
-            stream=True,
-            verify=self.verify_ssl,
-            timeout=DEFAULT_TIMEOUT)
-        ca_patrolmodel.raw.decode_content = True
+            })
 
         self.logger.info('Downloaded CA Patrol Model. Status code is: %s', ca_patrolmodel.status_code)
 
-        if not ca_patrolmodel.ok:
+        if not ca_patrolmodel.is_success:
             self.logger.error('Failed to download CA Patrol Model. Status_code is: %s', ca_patrolmodel.status_code)
             raise Exception('Failed to download Patrol Model.')
 
@@ -362,15 +346,11 @@ class SmartClient:
         ca_missionmodel = self._session.get(f'{self.api}/api/metadata/mission/{ca_uuid}',
             headers={
                 'accept': 'application/json',
-            },
-            stream=True,
-            verify=self.verify_ssl,
-            timeout=DEFAULT_TIMEOUT)
-        ca_missionmodel.raw.decode_content = True
+            })
 
         self.logger.info('Downloaded CA Mission Model. Status code is: %s', ca_missionmodel.status_code)
 
-        if not ca_missionmodel.ok:
+        if not ca_missionmodel.is_success:
             self.logger.error('Failed to download CA Mission Model. Status_code is: %s', ca_missionmodel.status_code)
             raise Exception('Failed to download Mission Model.')
 
@@ -378,22 +358,13 @@ class SmartClient:
         with open('_missionmodel.json', 'w') as fo:
             fo.write(ca_missionmodel.text)
 
-    def get_patrol_ids(self, *, device_id=None):
-
-        return self.patrol_id_map.setdefault(device_id, {
-            'patrol_uuid': str(uuid.uuid4()),
-            'patrol_leg_uuid': str(uuid.uuid4())
-        })
-
     @with_login_session()
     def get_patrol(self, *, patrol_id=None):
 
         response = self._session.get(f'{self.api}/api/query/custom/patrol',
-                                 params= {"client_patrol_uuid": patrol_id},
-                                 verify=self.verify_ssl,
-                                 timeout=DEFAULT_TIMEOUT)
+                                 params= {"client_patrol_uuid": patrol_id})
 
-        if response.ok and len(response.json()) > 0:
+        if response.is_success and len(response.json()) > 0:
             patrol = parse_obj_as(List[Patrol],response.json())[0]
             return patrol
 
@@ -401,11 +372,9 @@ class SmartClient:
     def get_patrol_waypoints(self, *, patrol_id=None):
 
         response = self._session.get(f'{self.api}/api/query/custom/waypoint/patrol',
-                                 params= {"client_patrol_uuid": patrol_id},
-                                 verify=self.verify_ssl,
-                                 timeout=DEFAULT_TIMEOUT)
+                                 params= {"client_patrol_uuid": patrol_id})
 
-        if response.ok and len(response.json()) > 0:
+        if response.is_success and len(response.json()) > 0:
             smart_response = parse_obj_as(List[SMARTResponse],response.json())
             return [item.properties.waypoint for item in smart_response]
 
@@ -414,11 +383,9 @@ class SmartClient:
 
         url = f'{self.api}/api/query/custom/waypoint/incident'
         response = self._session.get(url,
-                                params={"client_incident_uuid": incident_uuid},
-                                verify=self.verify_ssl,
-                                timeout=DEFAULT_TIMEOUT)
+                                params={"client_incident_uuid": incident_uuid})
 
-        if not response.ok:
+        if not response.is_success:
             logger.error("Failed lookup for incident %s", incident_uuid,
                      extra=dict(url=url,
                                 response_content=response.content)
@@ -440,10 +407,8 @@ class SmartClient:
         url = f'{self.api}/api/data/{ca_uuid}'
         response = self._session.post(url,
                                  headers={'content-type': 'application/json'},
-                                 data=json,
-                                 timeout=DEFAULT_TIMEOUT,
-                                 verify=self.verify_ssl)
-        if response.ok:
+                                 data=json)
+        if response.is_success:
             logger.info("Posted request to SMART successfully")
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug("SMART request succeeded", extra=dict(url=url,
@@ -484,10 +449,9 @@ class SmartClient:
         }
 
         response = self._session.post(f'{self.api}/api/data/{ca_uuid}',
-                                 json=track_point,
-                                 verify=self.verify_ssl)
+                                 json=track_point)
 
-        if response.ok:
+        if response.is_success:
             print('All good mate!')
         print(response.status_code, response.content)
 
@@ -514,10 +478,9 @@ class SmartClient:
         }
 
         response = self._session.post(f'{self.api}/api/data/{ca_uuid}',
-                                 json=way_point,
-                                 verify=self.verify_ssl)
+                                 json=way_point)
 
-        if response.ok:
+        if response.is_success:
             print('All good mate!')
         print(response.status_code, response.content)
 
@@ -527,9 +490,9 @@ class SmartClient:
     def add_independent_incident(self, *, incident: models.SMARTRequest, ca_uuid: str = None):
 
         response = self._session.post(f'{self.api}/api/data/{ca_uuid}', headers={'content-type': 'application/json'},
-            data=incident.json(), timeout=(3.1, 10), verify=self.verify_ssl)
+            data=incident.json())
 
-        if response.ok:
+        if response.is_success:
             print('All good mate!')
             print(response.content)
         else:
@@ -576,10 +539,9 @@ class SmartClient:
 
 
         response = self._session.post(f'{self.api}/api/data/{ca_uuid}',
-                                 json=track_point,
-                                 verify=self.verify_ssl)
+                                 json=track_point)
 
-        if response.ok:
+        if response.is_success:
             print('All good mate!')
         print(response.status_code, response.content)
 
