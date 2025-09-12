@@ -39,7 +39,14 @@ def conservation_areas(url, username, password, verbose):
 
     async def fn(client):
         val = await client.get_conservation_areas()
+
+        if val:
+            pass
+        else:
+            print('no conservation areas found')
         return val
+    
+
 
     client = AsyncSmartClient(api=url, username=username, password=password)
     results = asyncio.run(fn(client))
@@ -59,6 +66,52 @@ def download_datamodel(url, username, password, ca_uuid, filename):
     client = AsyncSmartClient(api=url, username=username, password=password)
     results = asyncio.run(fn(client))
     results.save(filename=filename)
+
+@cli.command(help="Post an Incident")
+@add_options(common_options)
+@click.option('--ca_uuid', help='Conservation Area UUID', required=True)
+def post_incident(url, username, password, ca_uuid):
+
+    payload = {
+        "type": "Feature",
+        "geometry": {
+            "coordinates": [
+                -88.99201666666667,
+                17.299483333333335
+            ]
+        },
+        "properties": {
+            "dateTime": "2024-03-21T18:00:00",
+            "smartDataType": "incident",
+            "smartFeatureType": "waypoint/new",
+            "smartAttributes": {
+                "observationGroups": [
+                    {
+                        "observations": [
+                            {
+                                "observationUuid": "9e9bf25f-f305-4bcd-9e9d-9adf5786ab71",
+                                "category": "gfwgladalert",
+                                "attributes": {
+                                    "confidence": 1
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "comment": "Report: GFW Integrated Deforestation Cluster (3 alerts)\nImported: 2024-04-17T13:00:19.233942-06:00",
+                "attachments": []
+            }
+        }
+    }
+
+    async def fn(client):
+        val = await client.post_smart_request(json=payload, ca_uuid=ca_uuid)
+        return val
+
+    client = AsyncSmartClient(api=url, username=username, password=password)
+    results = asyncio.run(fn(client))
+    print(results)
+
 
 if __name__ == '__main__':
     cli()
