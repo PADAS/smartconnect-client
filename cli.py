@@ -40,9 +40,7 @@ def conservation_areas(url, username, password, verbose):
     async def fn(client):
         val = await client.get_conservation_areas()
 
-        if val:
-            pass
-        else:
+        if not val:
             print('no conservation areas found')
         return val
     
