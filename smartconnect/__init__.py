@@ -39,7 +39,8 @@ class SmartClient:
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
-    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5"):
+    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5", 
+                 read_timeout=300.0, connect_timeout=10.0):
 
         self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
@@ -53,8 +54,9 @@ class SmartClient:
         # Configure httpx client with timeout and retries
         self.max_retries = smart_settings.SMART_DEFAULT_CONNECT_RETRIES
         transport = httpx.HTTPTransport(retries=self.max_retries)
-        connect_timeout = smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT
-        data_timeout = smart_settings.SMART_DEFAULT_TIMEOUT
+        # Use provided timeout values or fall back to environment variables
+        connect_timeout = connect_timeout if connect_timeout is not None else smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT
+        data_timeout = read_timeout if read_timeout is not None else smart_settings.SMART_DEFAULT_TIMEOUT
         timeout = httpx.Timeout(data_timeout, connect=connect_timeout, pool=connect_timeout)
         
         self._session = httpx.Client(transport=transport, timeout=timeout, verify=self.verify_ssl)
