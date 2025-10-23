@@ -140,7 +140,7 @@ class PatrolLeg(BaseModel):
     id: str
     mandate: dict
     members: List[dict]
-    start_date = date
+    start_date: date
     type: dict
     uuid: str
 
