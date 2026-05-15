@@ -36,8 +36,8 @@ class AsyncSmartClient:
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
-    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5", 
-                 read_timeout=300.0, connect_timeout=10.0, **kwargs):
+    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5",
+                 read_timeout=None, connect_timeout=None, **kwargs):
 
         self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
