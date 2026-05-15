@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+import warnings
 from datetime import datetime
 from typing import List, Union
 from functools import wraps
@@ -36,7 +37,8 @@ class AsyncSmartClient:
     # TODO: Figure out how to specify timezone.
     SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
-    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5", **kwargs):
+    def __init__(self, *, api=None, username=None, password=None, use_language_code='en', version="7.5",
+                 read_timeout=None, connect_timeout=None, **kwargs):
 
         self.api = api.rstrip('/')  # trim trailing slash in case configured into portal with one
         self.username = username
@@ -50,8 +52,19 @@ class AsyncSmartClient:
         # Retries and timeouts settings
         self.max_retries = kwargs.get('max_http_retries', smart_settings.SMART_DEFAULT_CONNECT_RETRIES)
         transport = httpx.AsyncHTTPTransport(retries=self.max_retries)
-        connect_timeout = kwargs.get('connect_timeout', smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT)
-        data_timeout = kwargs.get('data_timeout', smart_settings.SMART_DEFAULT_TIMEOUT)
+        # Backwards compatibility: `data_timeout` kwarg was previously accepted as
+        # the read/data timeout. Treat it as an alias for `read_timeout`.
+        if 'data_timeout' in kwargs:
+            warnings.warn(
+                "`data_timeout` is deprecated; pass `read_timeout` instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if read_timeout is None:
+                read_timeout = kwargs['data_timeout']
+        # Use provided timeout values or fall back to environment variables
+        connect_timeout = connect_timeout if connect_timeout is not None else smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT
+        data_timeout = read_timeout if read_timeout is not None else smart_settings.SMART_DEFAULT_TIMEOUT
         timeout = httpx.Timeout(data_timeout, connect=connect_timeout, pool=connect_timeout)
 
         # Session
