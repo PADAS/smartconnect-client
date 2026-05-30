@@ -605,12 +605,52 @@ class TestModelSerialization:
                 )
             )
         )
-        
+
         # Test JSON serialization
         json_str = request.json()
         data = json.loads(json_str)
-        
+
         assert data["type"] == "Feature"
         assert data["geometry"]["coordinates"] == [123.45, -67.89]
         assert data["properties"]["smartDataType"] == "incident"
         assert data["properties"]["dateTime"] == "2023-01-01T10:00:00"
+
+
+MINIMAL_CM_XML_WITH_NODE_ID = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ConfigurableModel xmlns="http://www.smartconservationsoftware.org/xml/1.0/dataentry">
+    <languages>
+        <language code="en"/>
+    </languages>
+    <name language_code="en" value="Test Model"/>
+    <nodes>
+        <node id="abc-123" categoryKey="leaf" categoryHkey="root.leaf.">
+            <name language_code="en" value="Leaf"/>
+        </node>
+    </nodes>
+</ConfigurableModel>"""
+
+
+class TestCategoryNodeId:
+    """Test Category model's id field for CM node ids."""
+
+    def test_category_model_accepts_optional_id(self):
+        """Test that Category model accepts optional id field."""
+        # Without id
+        cat_without_id = Category(path="p", display="D")
+        assert cat_without_id.id is None
+
+        # With id
+        cat_with_id = Category(path="p", display="D", id="x")
+        assert cat_with_id.id == "x"
+
+    def test_generate_node_paths_includes_node_id(self):
+        """Test that generate_node_paths extracts and includes node id from CM XML."""
+        cdm = ConfigurableDataModel(use_language_code="en", cm_uuid="cm-1")
+        cdm.load(MINIMAL_CM_XML_WITH_NODE_ID)
+
+        exported = cdm.export_as_dict()
+        cats = exported["categories"]
+
+        # Should have one category with the node id
+        assert len(cats) > 0
+        assert any(c.get("id") == "abc-123" for c in cats)

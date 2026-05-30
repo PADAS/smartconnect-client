@@ -22,6 +22,7 @@ class Category(BaseModel):
     is_multiple: Optional[bool] = Field(alias="ismultiple", default=False)
     is_active: Optional[bool] = Field(alias="isactive", default=True)
     attributes: Optional[List[CategoryAttribute]]
+    id: Optional[str] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -451,6 +452,14 @@ class ConfigurableDataModel:
                 'isActive': child['isActive'] == 'true'
             } for child in attribute.children]
 
+    @staticmethod
+    def _node_id(subcat):
+        """Extract node id safely, handling missing id attribute."""
+        try:
+            return subcat['id']
+        except (KeyError, AttributeError, IndexError):
+            return None
+
     def generate_node_paths(self, root, prefix=None):
         if hasattr(root, 'node'):
             for subcat in root.node:
@@ -460,7 +469,8 @@ class ConfigurableDataModel:
                             'path': f'{prefix}.{subcat["categoryKey"]}',
                             'hkeyPath': subcat['categoryHkey'].rstrip('.'),
                             'attributes': list(self.generate_category_attributes(subcat)),
-                            'display': self.resolve_display(subcat.name, language_code=self.use_language_code)
+                            'display': self.resolve_display(subcat.name, language_code=self.use_language_code),
+                            'id': self._node_id(subcat)
                         }
                     new_prefix = f'{prefix}.{subcat["key"]}'
                 else:
@@ -469,7 +479,8 @@ class ConfigurableDataModel:
                             'path': subcat['categoryKey'],
                             'hkeyPath': subcat['categoryHkey'].rstrip('.'),
                             'attributes': list(self.generate_category_attributes(subcat)),
-                            'display': self.resolve_display(subcat.name, language_code=self.use_language_code)
+                            'display': self.resolve_display(subcat.name, language_code=self.use_language_code),
+                            'id': self._node_id(subcat)
                         }
                     new_prefix = subcat['categoryKey']
                 yield from self.generate_node_paths(subcat, prefix=new_prefix)
