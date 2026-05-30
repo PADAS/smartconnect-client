@@ -455,10 +455,9 @@ class ConfigurableDataModel:
     @staticmethod
     def _node_id(subcat):
         """Extract node id safely, handling missing id attribute."""
-        try:
-            return subcat['id']
-        except (KeyError, AttributeError, IndexError):
-            return None
+        # untangle.Element returns None for a missing XML attribute (no exception),
+        # so a direct subscript is safe.
+        return subcat['id']
 
     def generate_node_paths(self, root, prefix=None):
         if hasattr(root, 'node'):
