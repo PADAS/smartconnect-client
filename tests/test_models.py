@@ -623,8 +623,11 @@ MINIMAL_CM_XML_WITH_NODE_ID = """<?xml version="1.0" encoding="UTF-8" standalone
     </languages>
     <name language_code="en" value="Test Model"/>
     <nodes>
-        <node id="abc-123" categoryKey="leaf" categoryHkey="root.leaf.">
-            <name language_code="en" value="Leaf"/>
+        <node id="abc-123" categoryKey="leaf-with-id" categoryHkey="root.leaf_with_id.">
+            <name language_code="en" value="Leaf With ID"/>
+        </node>
+        <node categoryKey="leaf-no-id" categoryHkey="root.leaf_no_id.">
+            <name language_code="en" value="Leaf No ID"/>
         </node>
     </nodes>
 </ConfigurableModel>"""
@@ -636,11 +639,11 @@ class TestCategoryNodeId:
     def test_category_model_accepts_optional_id(self):
         """Test that Category model accepts optional id field."""
         # Without id
-        cat_without_id = Category(path="p", display="D")
+        cat_without_id = Category(path="p", hkeyPath=None, display="D")
         assert cat_without_id.id is None
 
         # With id
-        cat_with_id = Category(path="p", display="D", id="x")
+        cat_with_id = Category(path="p", hkeyPath=None, display="D", id="x")
         assert cat_with_id.id == "x"
 
     def test_generate_node_paths_includes_node_id(self):
@@ -651,6 +654,9 @@ class TestCategoryNodeId:
         exported = cdm.export_as_dict()
         cats = exported["categories"]
 
-        # Should have one category with the node id
-        assert len(cats) > 0
+        # Multiple categories emitted (one with id, one without).
+        assert len(cats) == 2
+        # The id-bearing node has its id populated.
         assert any(c.get("id") == "abc-123" for c in cats)
+        # The id-less node yields id=None (safe-fallback path in _node_id).
+        assert any(c.get("id") is None for c in cats)
