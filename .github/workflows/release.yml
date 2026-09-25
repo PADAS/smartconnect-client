@@ -28,6 +28,8 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v6
         with:
+          # Pin the release-critical uv binary; bump deliberately.
+          version: "0.11.29"
           python-version: "3.11"
 
       - name: Install dependencies
@@ -57,12 +59,20 @@ jobs:
       - name: Show built artifacts
         run: ls -la dist/
 
+      - name: Validate artifact metadata
+        # Catch metadata PyPI would reject before the publish step runs.
+        run: uvx twine check --strict dist/*
+
       - name: Publish to PyPI
         # Trusted Publisher (OIDC) — no API token. Requires a one-time
         # config on pypi.org: pypi.org/manage/account/publishing/ →
         # add a trusted publisher for `smartconnect-client` pointing at
         # this repo, workflow `release.yml`, environment `pypi`.
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run after a partial failure (e.g. the GitHub Release step
+          # died post-upload) must not fail on already-published files.
+          skip-existing: true
 
       - name: Create GitHub Release
         # Keep the GitHub Release path too: existing consumers
