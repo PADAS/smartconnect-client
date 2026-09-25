@@ -12,6 +12,9 @@ SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 class CategoryAttribute(BaseModel):
     key: str
     is_active: bool = Field(alias="isactive", default=True)
+    # CM node attributes reference their curated option list via configId;
+    # None for DM attributes and for CM dicts cached by older versions.
+    config_id: Optional[str] = None
     class Config:
         allow_population_by_field_name = True
 
@@ -442,7 +445,10 @@ class ConfigurableDataModel:
             for attribute in root.attribute:
                 yield {
                     'key': attribute['attributeKey'],
-                    'isactive': next(option["doubleValue"] for option in attribute.option if option["id"] == 'IS_VISIBLE') == '1.0'
+                    'isactive': next(option["doubleValue"] for option in attribute.option if option["id"] == 'IS_VISIBLE') == '1.0',
+                    # Which attributeConfig curates this attribute's options
+                    # for this node; None when the node doesn't set one.
+                    'config_id': attribute['configId'],
                 }
 
     def get_list_options(self, attribute):
@@ -491,7 +497,14 @@ class ConfigurableDataModel:
 
                 yield {
                     'key': attribute['attributeKey'],
-                    'options': options
+                    'options': options,
+                    # A CM may carry several attributeConfigs for one
+                    # attributeKey (per-node curations); expose each config's
+                    # identity so consumers can tell them apart. Entries stay
+                    # in document order, so consumers that take the first
+                    # entry per key keep their previous behavior.
+                    'config_id': attribute['id'],
+                    'is_default': attribute['isDefault'] == 'true',
                 }
 
     @staticmethod
