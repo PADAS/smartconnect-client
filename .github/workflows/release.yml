@@ -25,23 +25,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
         with:
+          # Pin the release-critical uv binary; bump deliberately.
+          version: "0.11.29"
           python-version: "3.11"
 
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
       - name: Install dependencies
-        run: poetry install --no-interaction
+        run: uv sync --locked
 
       - name: Run tests
         # Gate the release on the test suite passing against the tagged
         # commit. Without this, a broken tag would still ship to PyPI.
-        run: poetry run pytest -q
+        run: uv run pytest -q
 
       - name: Verify pyproject version matches tag
         # The package version in pyproject.toml is static — make sure the
@@ -49,7 +46,7 @@ jobs:
         # version that doesn't reflect the tag.
         run: |
           tag_version="${GITHUB_REF_NAME#v}"
-          pkg_version=$(poetry version --short)
+          pkg_version=$(uv version --short)
           if [ "$tag_version" != "$pkg_version" ]; then
             echo "::error::Tag ($tag_version) and pyproject ($pkg_version) versions differ"
             exit 1
@@ -57,10 +54,14 @@ jobs:
           echo "Tag and pyproject both at $pkg_version"
 
       - name: Build wheel and sdist
-        run: poetry build
+        run: uv build
 
       - name: Show built artifacts
         run: ls -la dist/
+
+      - name: Validate artifact metadata
+        # Catch metadata PyPI would reject before the publish step runs.
+        run: uvx twine check --strict dist/*
 
       - name: Publish to PyPI
         # Trusted Publisher (OIDC) — no API token. Requires a one-time
@@ -68,6 +69,10 @@ jobs:
         # add a trusted publisher for `smartconnect-client` pointing at
         # this repo, workflow `release.yml`, environment `pypi`.
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run after a partial failure (e.g. the GitHub Release step
+          # died post-upload) must not fail on already-published files.
+          skip-existing: true
 
       - name: Create GitHub Release
         # Keep the GitHub Release path too: existing consumers
