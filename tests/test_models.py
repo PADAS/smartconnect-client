@@ -660,3 +660,145 @@ class TestCategoryNodeId:
         assert any(c.get("id") == "abc-123" for c in cats)
         # The id-less node yields id=None (safe-fallback path in _node_id).
         assert any(c.get("id") is None for c in cats)
+
+
+MINIMAL_CM_XML_WITH_ATTRIBUTE_CONFIGS = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ConfigurableModel xmlns="http://www.smartconservationsoftware.org/xml/1.0/dataentry">
+    <languages>
+        <language code="en"/>
+    </languages>
+    <name language_code="en" value="Test Model"/>
+    <nodes>
+        <node id="n1" categoryKey="cat1" categoryHkey="cat1.">
+            <name language_code="en" value="Cat One"/>
+            <attribute attributeKey="color" configId="cfg-color-default" type="LIST">
+                <name language_code="en" value="Color"/>
+                <option id="IS_VISIBLE" doubleValue="1.0"/>
+            </attribute>
+            <attribute attributeKey="notes" type="TEXT">
+                <name language_code="en" value="Notes"/>
+                <option id="IS_VISIBLE" doubleValue="1.0"/>
+            </attribute>
+        </node>
+        <node id="n2" categoryKey="cat2" categoryHkey="cat2.">
+            <name language_code="en" value="Cat Two"/>
+            <attribute attributeKey="color" configId="cfg-color-custom" type="LIST">
+                <name language_code="en" value="Color"/>
+                <option id="IS_VISIBLE" doubleValue="1.0"/>
+            </attribute>
+        </node>
+    </nodes>
+    <attributeConfig id="cfg-color-default" attributeKey="color" isDefault="true">
+        <name language_code="en" value="Color"/>
+        <listItem keyRef="red" isActive="true"><name language_code="en" value="Red"/></listItem>
+        <listItem keyRef="blue" isActive="false"><name language_code="en" value="Blue"/></listItem>
+    </attributeConfig>
+    <attributeConfig id="cfg-color-custom" attributeKey="color" isDefault="false">
+        <name language_code="en" value="Color"/>
+        <listItem keyRef="red" isActive="true"><name language_code="en" value="Red"/></listItem>
+    </attributeConfig>
+    <attributeConfig id="cfg-region" attributeKey="region" isDefault="true">
+        <name language_code="en" value="Region"/>
+        <treeNode keyRef="chobe" isActive="true">
+            <name language_code="en" value="Chobe"/>
+            <children keyRef="mabele" isActive="true">
+                <name language_code="en" value="Mabele"/>
+            </children>
+        </treeNode>
+    </attributeConfig>
+</ConfigurableModel>"""
+
+
+def _load_cm_with_configs():
+    cdm = ConfigurableDataModel(use_language_code="en", cm_uuid="cm-1")
+    cdm.load(MINIMAL_CM_XML_WITH_ATTRIBUTE_CONFIGS)
+    return cdm.export_as_dict()
+
+
+class TestConfigurableModelConfigId:
+    """attributeConfig identity is exposed so consumers can distinguish
+    per-node curations of the same attribute key."""
+
+    def test_generate_attributes_includes_config_id(self):
+        attrs = _load_cm_with_configs()["attributes"]
+        config_ids = [a.get("config_id") for a in attrs]
+        assert config_ids == ["cfg-color-default", "cfg-color-custom", "cfg-region"]
+
+    def test_generate_attributes_includes_is_default(self):
+        attrs = _load_cm_with_configs()["attributes"]
+        by_config = {a["config_id"]: a for a in attrs}
+        assert by_config["cfg-color-default"]["is_default"] is True
+        assert by_config["cfg-color-custom"]["is_default"] is False
+
+    def test_duplicate_key_configs_both_present_in_document_order(self):
+        """Two attributeConfigs for one attributeKey both survive, in
+        document order — consumers that take the first entry per key keep
+        today's behavior."""
+        attrs = _load_cm_with_configs()["attributes"]
+        color_entries = [a for a in attrs if a["key"] == "color"]
+        assert [a["config_id"] for a in color_entries] == [
+            "cfg-color-default",
+            "cfg-color-custom",
+        ]
+
+    def test_node_attributes_include_config_id(self):
+        cats = _load_cm_with_configs()["categories"]
+        cat1 = next(c for c in cats if c["path"] == "cat1")
+        cat2 = next(c for c in cats if c["path"] == "cat2")
+        color1 = next(a for a in cat1["attributes"] if a["key"] == "color")
+        color2 = next(a for a in cat2["attributes"] if a["key"] == "color")
+        assert color1["config_id"] == "cfg-color-default"
+        assert color2["config_id"] == "cfg-color-custom"
+
+    def test_node_attribute_without_config_id_yields_none(self):
+        cats = _load_cm_with_configs()["categories"]
+        cat1 = next(c for c in cats if c["path"] == "cat1")
+        notes = next(a for a in cat1["attributes"] if a["key"] == "notes")
+        assert notes["config_id"] is None
+
+    def test_export_import_round_trip_preserves_config_ids(self):
+        cdm = ConfigurableDataModel(use_language_code="en", cm_uuid="cm-1")
+        cdm.load(MINIMAL_CM_XML_WITH_ATTRIBUTE_CONFIGS)
+        exported = cdm.export_as_dict()
+
+        rehydrated = ConfigurableDataModel(use_language_code="en")
+        rehydrated.import_from_dict(json.loads(json.dumps(exported)))
+        assert rehydrated.export_as_dict()["attributes"] == exported["attributes"]
+
+    def test_category_attribute_model_accepts_optional_config_id(self):
+        assert CategoryAttribute(key="color").config_id is None
+        assert (
+            CategoryAttribute(key="color", config_id="cfg-1").config_id == "cfg-1"
+        )
+
+
+class TestGetListOptionsCharacterization:
+    """Pin get_list_options' current behavior before any refactor.
+
+    These document known quirks, not desired behavior: untangle's
+    ``.children`` is the built-in list of ALL child elements, so the
+    ``<name>`` child leaks through as a junk entry, and nested TREE
+    ``<children>`` elements are never reached.
+    """
+
+    def test_name_child_leaks_as_none_key_entry(self):
+        attrs = _load_cm_with_configs()["attributes"]
+        color = next(a for a in attrs if a.get("config_id") == "cfg-color-default")
+        assert color["options"][0] == {"key": None, "isActive": False}
+
+    def test_list_items_follow_in_document_order(self):
+        attrs = _load_cm_with_configs()["attributes"]
+        color = next(a for a in attrs if a.get("config_id") == "cfg-color-default")
+        assert color["options"][1:] == [
+            {"key": "red", "isActive": True},
+            {"key": "blue", "isActive": False},
+        ]
+
+    def test_tree_config_yields_top_level_nodes_only(self):
+        """Nested <children keyRef=...> under a treeNode are NOT surfaced —
+        only the treeNode's own keyRef appears."""
+        attrs = _load_cm_with_configs()["attributes"]
+        region = next(a for a in attrs if a["key"] == "region")
+        keys = [o["key"] for o in region["options"]]
+        assert "chobe" in keys
+        assert "mabele" not in keys
