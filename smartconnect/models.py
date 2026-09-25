@@ -305,14 +305,21 @@ class DataModel:
         if hasattr(attribute, 'tree'):
 
             for tree_value in attribute.tree:
+                # Effective isActive: own flag AND ancestors'. Absent flag
+                # defaults to active. (ERCS-8246: the flag was dropped for
+                # trees, so inactive SMART options migrated as active.)
+                is_active = tree_value['isactive'] != 'false'
                 val = {
                     'key': tree_value['key'],
+                    'isActive': is_active,
                     'display': self.resolve_display(tree_value.names, language_code=self.use_language_code)
                 }
                 yield val
-                yield from self.generate_tree_children(tree_value, prefix=val['key'])
+                yield from self.generate_tree_children(
+                    tree_value, prefix=val['key'], ancestors_active=is_active
+                )
 
-    def generate_tree_children(self, branch, prefix=''):
+    def generate_tree_children(self, branch, prefix='', ancestors_active=True):
         if hasattr(branch, 'children'):
             for elem in branch.children:
 
@@ -320,6 +327,7 @@ class DataModel:
                     child = elem
 
                     this_key = '.'.join([prefix, child['key']])
+                    is_active = ancestors_active and child['isactive'] != 'false'
 
                     if hasattr(child, 'names'):
                         display = self.resolve_display(child.names, language_code=self.use_language_code)
@@ -328,10 +336,13 @@ class DataModel:
 
                     val = {
                         'key': this_key,
+                        'isActive': is_active,
                         'display': display,
                     }
                     yield val
-                    yield from self.generate_tree_children(child, prefix=this_key)
+                    yield from self.generate_tree_children(
+                        child, prefix=this_key, ancestors_active=is_active
+                    )
 
 
     def generate_category_paths(self, root, prefix=None):
@@ -364,7 +375,9 @@ class DataModel:
         if hasattr(root, 'attribute'):
             for attribute in root.attribute:
 
-                if attribute['type'] == 'LIST':
+                # MLIST carries <values> exactly like LIST (previously it
+                # fell through to options=None and lost its choices).
+                if attribute['type'] in ('LIST', 'MLIST'):
                     options = list(self.get_list_options(attribute))
                 elif attribute['type'] == 'TREE':
                     options = list(self.get_tree_options(attribute))
@@ -452,11 +465,46 @@ class ConfigurableDataModel:
                 }
 
     def get_list_options(self, attribute):
-        if hasattr(attribute, 'children'):
-            yield from [{
-                'key': child['keyRef'],
-                'isActive': child['isActive'] == 'true'
-            } for child in attribute.children]
+        """Yield the curated options of one attributeConfig.
+
+        <listItem> children yield flat entries in document order. <treeNode>
+        children are recursed: only CM-leaf nodes (no nested <children>)
+        surface, keyed by their dotted path so they match the base data
+        model's TREE option keys, with effective isActive (own flag AND all
+        ancestors'). Other children (e.g. <name>) are skipped. (ERCS-8246:
+        tree configs previously surfaced only top-level parents.)
+        """
+        for child in getattr(attribute, 'children', []):
+            if child._name == 'listItem':
+                if child['keyRef']:
+                    yield {
+                        'key': child['keyRef'],
+                        'isActive': child['isActive'] == 'true',
+                    }
+            elif child._name == 'treeNode':
+                yield from self._tree_config_leaves(
+                    child, prefix='', ancestors_active=True
+                )
+
+    def _tree_config_leaves(self, node, prefix, ancestors_active):
+        """Depth-first CM-leaf options for a treeNode/children hierarchy."""
+        key_ref = node['keyRef']
+        if not key_ref:
+            return
+        # hkeyRef carries the dotted path with a trailing dot; fall back to
+        # joining segments for files that omit it.
+        dotted = (node['hkeyRef'] or '').rstrip('.') or (
+            f'{prefix}.{key_ref}' if prefix else key_ref
+        )
+        is_active = ancestors_active and node['isActive'] == 'true'
+        child_nodes = [c for c in node.children if c._name == 'children']
+        if not child_nodes:
+            yield {'key': dotted, 'isActive': is_active}
+            return
+        for child in child_nodes:
+            yield from self._tree_config_leaves(
+                child, prefix=dotted, ancestors_active=is_active
+            )
 
     @staticmethod
     def _node_id(subcat):

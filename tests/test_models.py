@@ -699,11 +699,23 @@ MINIMAL_CM_XML_WITH_ATTRIBUTE_CONFIGS = """<?xml version="1.0" encoding="UTF-8" 
     </attributeConfig>
     <attributeConfig id="cfg-region" attributeKey="region" isDefault="true">
         <name language_code="en" value="Region"/>
-        <treeNode keyRef="chobe" isActive="true">
+        <treeNode keyRef="chobe" hkeyRef="chobe." isActive="true">
             <name language_code="en" value="Chobe"/>
-            <children keyRef="mabele" isActive="true">
+            <children keyRef="mabele" hkeyRef="chobe.mabele." isActive="true">
                 <name language_code="en" value="Mabele"/>
+                <children keyRef="muchenje" hkeyRef="chobe.mabele.muchenje." isActive="true">
+                    <name language_code="en" value="Muchenje"/>
+                </children>
             </children>
+            <children keyRef="kavimba" hkeyRef="chobe.kavimba." isActive="false">
+                <name language_code="en" value="Kavimba"/>
+                <children keyRef="kavimba1" hkeyRef="chobe.kavimba.kavimba1." isActive="true">
+                    <name language_code="en" value="Kavimba 1"/>
+                </children>
+            </children>
+        </treeNode>
+        <treeNode keyRef="boteti" isActive="true">
+            <name language_code="en" value="Boteti"/>
         </treeNode>
     </attributeConfig>
 </ConfigurableModel>"""
@@ -772,33 +784,129 @@ class TestConfigurableModelConfigId:
         )
 
 
-class TestGetListOptionsCharacterization:
-    """Pin get_list_options' current behavior before any refactor.
+class TestGetListOptionsCM:
+    """CM attributeConfig options: listItems stay flat; tree configs are
+    recursed so CM-leaf nodes surface with dotted keys matching the base
+    data model's TREE option keys (ERCS-8246)."""
 
-    These document known quirks, not desired behavior: untangle's
-    ``.children`` is the built-in list of ALL child elements, so the
-    ``<name>`` child leaks through as a junk entry, and nested TREE
-    ``<children>`` elements are never reached.
-    """
-
-    def test_name_child_leaks_as_none_key_entry(self):
+    def test_name_child_is_skipped(self):
+        """The <name> element must not leak into the options list."""
         attrs = _load_cm_with_configs()["attributes"]
         color = next(a for a in attrs if a.get("config_id") == "cfg-color-default")
-        assert color["options"][0] == {"key": None, "isActive": False}
+        assert all(o["key"] for o in color["options"])
 
-    def test_list_items_follow_in_document_order(self):
+    def test_list_items_in_document_order(self):
         attrs = _load_cm_with_configs()["attributes"]
         color = next(a for a in attrs if a.get("config_id") == "cfg-color-default")
-        assert color["options"][1:] == [
+        assert color["options"] == [
             {"key": "red", "isActive": True},
             {"key": "blue", "isActive": False},
         ]
 
-    def test_tree_config_yields_top_level_nodes_only(self):
-        """Nested <children keyRef=...> under a treeNode are NOT surfaced —
-        only the treeNode's own keyRef appears."""
+    def test_tree_config_yields_leaves_with_dotted_keys(self):
+        """Only CM-leaf nodes surface, keyed by their dotted path — matching
+        the base DM's TREE option keys so overlay matching works."""
         attrs = _load_cm_with_configs()["attributes"]
         region = next(a for a in attrs if a["key"] == "region")
         keys = [o["key"] for o in region["options"]]
-        assert "chobe" in keys
-        assert "mabele" not in keys
+        assert "chobe.mabele.muchenje" in keys
+        # Parents with children are not options themselves.
+        assert "chobe" not in keys
+        assert "chobe.mabele" not in keys
+
+    def test_tree_config_inactive_parent_cascades_to_leaves(self):
+        """A leaf under a deactivated branch arrives inactive (effective
+        is_active = own flag AND all ancestors')."""
+        attrs = _load_cm_with_configs()["attributes"]
+        region = next(a for a in attrs if a["key"] == "region")
+        by_key = {o["key"]: o for o in region["options"]}
+        # kavimba1 is active itself but its parent kavimba is inactive.
+        assert by_key["chobe.kavimba.kavimba1"]["isActive"] is False
+        assert by_key["chobe.mabele.muchenje"]["isActive"] is True
+
+    def test_tree_node_without_children_is_its_own_leaf(self):
+        """A childless treeNode without hkeyRef falls back to its keyRef."""
+        attrs = _load_cm_with_configs()["attributes"]
+        region = next(a for a in attrs if a["key"] == "region")
+        by_key = {o["key"]: o for o in region["options"]}
+        assert by_key["boteti"]["isActive"] is True
+
+
+MINIMAL_DM_XML_WITH_TREE_AND_MLIST = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<DataModel xmlns="http://www.smartconservationsoftware.org/xml/1.1/datamodel">
+    <languages>
+        <languages code="en"/>
+    </languages>
+    <attributes>
+        <attribute key="causeofdeath" isrequired="false" type="TREE">
+            <names language_code="en" value="Cause of Death"/>
+            <tree key="natural" isactive="true">
+                <names language_code="en" value="Natural"/>
+                <children key="disease" isactive="true">
+                    <names language_code="en" value="Disease"/>
+                </children>
+                <children key="oldage" isactive="false">
+                    <names language_code="en" value="Old Age"/>
+                </children>
+            </tree>
+            <tree key="illegal" isactive="false">
+                <names language_code="en" value="Illegal"/>
+                <children key="poisoning" isactive="true">
+                    <names language_code="en" value="Poisoning"/>
+                </children>
+            </tree>
+        </attribute>
+        <attribute key="actiontaken" isrequired="false" type="MLIST">
+            <names language_code="en" value="Action Taken"/>
+            <values key="warned" isactive="true">
+                <names language_code="en" value="Warned"/>
+            </values>
+            <values key="arrested" isactive="false">
+                <names language_code="en" value="Arrested"/>
+            </values>
+        </attribute>
+    </attributes>
+    <categories>
+    </categories>
+</DataModel>"""
+
+
+def _load_dm_with_tree_and_mlist():
+    dm = DataModel(use_language_code="en")
+    dm.load(MINIMAL_DM_XML_WITH_TREE_AND_MLIST)
+    return dm.export_as_dict()
+
+
+class TestDataModelTreeOptions:
+    """Base DM TREE options carry effective isActive (ERCS-8246: inactive
+    SMART options were migrating as active because the parser dropped the
+    flag for trees entirely)."""
+
+    def test_tree_options_carry_is_active(self):
+        attrs = _load_dm_with_tree_and_mlist()["attributes"]
+        tree = next(a for a in attrs if a["key"] == "causeofdeath")
+        by_key = {o["key"]: o for o in tree["options"]}
+        assert by_key["natural"]["isActive"] is True
+        assert by_key["natural.disease"]["isActive"] is True
+        assert by_key["natural.oldage"]["isActive"] is False
+
+    def test_tree_inactive_parent_cascades_to_children(self):
+        attrs = _load_dm_with_tree_and_mlist()["attributes"]
+        tree = next(a for a in attrs if a["key"] == "causeofdeath")
+        by_key = {o["key"]: o for o in tree["options"]}
+        assert by_key["illegal"]["isActive"] is False
+        # poisoning is active itself but sits under the inactive branch.
+        assert by_key["illegal.poisoning"]["isActive"] is False
+
+
+class TestDataModelMlistOptions:
+    """MLIST attributes parse their <values> options exactly like LIST
+    (previously they came out with options=None)."""
+
+    def test_mlist_options_parsed(self):
+        attrs = _load_dm_with_tree_and_mlist()["attributes"]
+        mlist = next(a for a in attrs if a["key"] == "actiontaken")
+        assert mlist["options"] == [
+            {"key": "warned", "isActive": True, "display": "Warned"},
+            {"key": "arrested", "isActive": False, "display": "Arrested"},
+        ]
