@@ -247,6 +247,18 @@ class SMARTCompositeRequest(BaseModel):
     track_point_requests: Optional[List[SMARTRequest]] = []
 
 
+def _resolve_attribute_option_key(attribute, *, key: str, value: str) -> str:
+    """Map an ER Choice value back to the SMART option key of ``attribute``.
+
+    ``attribute`` is the dict ``get_attribute`` returned, or None when the
+    data model has no attribute ``key``.
+    """
+    if not attribute:
+        raise UnresolvableOptionKey(f"Attribute {key!r} not found in data model")
+    option_keys = [option["key"] for option in attribute.get("options") or []]
+    return resolve_option_key(option_keys, value)
+
+
 class DataModel:
 
     def __init__(self, use_language_code='en'):
@@ -288,11 +300,7 @@ class DataModel:
 
     def resolve_option_key(self, *, key: str, value: str) -> str:
         """Map an ER Choice value back to the SMART option key of attribute ``key``."""
-        attribute = self.get_attribute(key=key)
-        if not attribute:
-            raise UnresolvableOptionKey(f"Attribute {key!r} not found in data model")
-        option_keys = [option["key"] for option in attribute.get("options") or []]
-        return resolve_option_key(option_keys, value)
+        return _resolve_attribute_option_key(self.get_attribute(key=key), key=key, value=value)
 
     def generate_category_attributes(self, root):
 
@@ -464,11 +472,7 @@ class ConfigurableDataModel:
 
     def resolve_option_key(self, *, key: str, value: str) -> str:
         """Map an ER Choice value back to the SMART option key of attribute ``key``."""
-        attribute = self.get_attribute(key=key)
-        if not attribute:
-            raise UnresolvableOptionKey(f"Attribute {key!r} not found in data model")
-        option_keys = [option["key"] for option in attribute.get("options") or []]
-        return resolve_option_key(option_keys, value)
+        return _resolve_attribute_option_key(self.get_attribute(key=key), key=key, value=value)
 
     @staticmethod
     def generate_category_attributes(root):
