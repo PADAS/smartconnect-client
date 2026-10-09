@@ -48,7 +48,8 @@ def shorten_choice_value(sanitized: str) -> str:
     """Hash-suffix values longer than ``CHOICE_VALUE_MAX_LEN``.
 
     Deterministic: the same input always yields the same output, and two
-    inputs sharing the first 91 characters get different hash tails.
+    inputs sharing the first 91 characters get different hash tails except
+    on a 32-bit tail collision, which is vanishingly rare but not impossible.
     """
     if len(sanitized) <= CHOICE_VALUE_MAX_LEN:
         return sanitized
@@ -73,7 +74,7 @@ def resolve_option_key(option_keys: Iterable[str], value: str) -> str:
         raise UnresolvableOptionKey(
             f"Choice value must be a string, got {type(value).__name__}: {value!r}"
         )
-    keys: List[str] = list(option_keys)
+    keys: List[str] = list(dict.fromkeys(option_keys))
     if value in keys:
         return value
     matches = [key for key in keys if choice_value_for_option_key(key) == value]

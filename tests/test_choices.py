@@ -1,4 +1,5 @@
 import hashlib
+import re
 
 import pytest
 
@@ -12,6 +13,7 @@ from smartconnect.choices import (
     sanitize_choice_value,
     shorten_choice_value,
 )
+from smartconnect.models import ConfigurableDataModel, DataModel
 
 
 @pytest.mark.parametrize(
@@ -45,7 +47,17 @@ def test_shorten_hashes_values_over_100_to_exactly_100():
 
 def test_choice_value_for_option_key_sanitizes_then_shortens():
     raw = "Long.Key." * 20  # 180 chars before sanitizing
-    assert choice_value_for_option_key(raw) == shorten_choice_value(sanitize_choice_value(raw))
+    out = choice_value_for_option_key(raw)
+    assert len(out) == CHOICE_VALUE_MAX_LEN
+    assert out.startswith(sanitize_choice_value(raw)[:91] + "_")
+    assert re.fullmatch(r"[0-9a-f]{8}", out[92:])
+
+
+def test_shorten_101_char_boundary():
+    raw = "c" * 101
+    out = shorten_choice_value(raw)
+    assert len(out) == CHOICE_VALUE_MAX_LEN
+    assert out != raw
 
 
 def test_resolve_exact_match_wins_over_sanitized_match():
@@ -73,6 +85,10 @@ def test_resolve_raises_when_nothing_matches():
         resolve_option_key(["healthy", "injured"], "dead")
 
 
+def test_resolve_duplicate_keys_are_not_a_collision():
+    assert resolve_option_key(["Lion", "Lion"], "lion") == "Lion"
+
+
 def test_resolve_raises_on_collision():
     with pytest.raises(AmbiguousOptionKey):
         resolve_option_key(["Lion", "LION"], "lion")
@@ -88,8 +104,6 @@ def test_exceptions_share_a_base():
     assert issubclass(AmbiguousOptionKey, OptionKeyResolutionError)
     assert issubclass(OptionKeyResolutionError, ValueError)
 
-
-from smartconnect.models import ConfigurableDataModel, DataModel
 
 MINIMAL_CM_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <ConfigurableModel xmlns="http://www.smartconservationsoftware.org/xml/1.0/configurablemodel">
@@ -134,4 +148,25 @@ def test_datamodel_raises_for_unknown_attribute():
 def test_configurable_datamodel_resolves_from_curated_options():
     cdm = ConfigurableDataModel(use_language_code="en", cm_uuid="cm-1")
     cdm.load(MINIMAL_CM_XML)
+    assert cdm.resolve_option_key(key="Wildlife.State", value="healthy") == "Healthy"
+
+
+MULTI_CONFIG_CM_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<ConfigurableModel xmlns="http://www.smartconservationsoftware.org/xml/1.0/configurablemodel">
+  <name value="Test CM" language_code="en"/>
+  <nodes/>
+  <attributeConfig id="cfg-1" attributeKey="Wildlife.State" isDefault="true">
+    <listItem keyRef="Healthy" isActive="true"/>
+  </attributeConfig>
+  <attributeConfig id="cfg-2" attributeKey="Wildlife.State" isDefault="false">
+    <listItem keyRef="Injured" isActive="true"/>
+  </attributeConfig>
+</ConfigurableModel>
+"""
+
+
+def test_configurable_datamodel_resolves_across_all_configs_for_key():
+    cdm = ConfigurableDataModel(use_language_code="en", cm_uuid="cm-1")
+    cdm.load(MULTI_CONFIG_CM_XML)
+    assert cdm.resolve_option_key(key="Wildlife.State", value="injured") == "Injured"
     assert cdm.resolve_option_key(key="Wildlife.State", value="healthy") == "Healthy"
