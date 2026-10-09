@@ -6,6 +6,8 @@ from typing import List, Any, Optional, Union
 import untangle
 from pydantic import BaseModel, Field, parse_obj_as, validator, ValidationError
 
+from smartconnect.choices import UnresolvableOptionKey, resolve_option_key
+
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
 
@@ -284,6 +286,14 @@ class DataModel:
             if att['key'] == key:
                 return att
 
+    def resolve_option_key(self, *, key: str, value: str) -> str:
+        """Map an ER Choice value back to the SMART option key of attribute ``key``."""
+        attribute = self.get_attribute(key=key)
+        if not attribute:
+            raise UnresolvableOptionKey(f"Attribute {key!r} not found in data model")
+        option_keys = [option["key"] for option in attribute.get("options") or []]
+        return resolve_option_key(option_keys, value)
+
     def generate_category_attributes(self, root):
 
         if attribute_list := getattr(root, 'attributes', None) or getattr(root, 'attribute', None):
@@ -451,6 +461,14 @@ class ConfigurableDataModel:
         for att in self._attributes:
             if att['key'] == key:
                 return att
+
+    def resolve_option_key(self, *, key: str, value: str) -> str:
+        """Map an ER Choice value back to the SMART option key of attribute ``key``."""
+        attribute = self.get_attribute(key=key)
+        if not attribute:
+            raise UnresolvableOptionKey(f"Attribute {key!r} not found in data model")
+        option_keys = [option["key"] for option in attribute.get("options") or []]
+        return resolve_option_key(option_keys, value)
 
     @staticmethod
     def generate_category_attributes(root):

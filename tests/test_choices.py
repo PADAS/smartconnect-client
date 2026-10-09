@@ -87,3 +87,51 @@ def test_exceptions_share_a_base():
     assert issubclass(UnresolvableOptionKey, OptionKeyResolutionError)
     assert issubclass(AmbiguousOptionKey, OptionKeyResolutionError)
     assert issubclass(OptionKeyResolutionError, ValueError)
+
+
+from smartconnect.models import ConfigurableDataModel, DataModel
+
+MINIMAL_CM_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<ConfigurableModel xmlns="http://www.smartconservationsoftware.org/xml/1.0/configurablemodel">
+  <name value="Test CM" language_code="en"/>
+  <nodes/>
+  <attributeConfig id="cfg-1" attributeKey="Wildlife.State" isDefault="true">
+    <listItem keyRef="Healthy" isActive="true"/>
+    <listItem keyRef="Injured" isActive="true"/>
+  </attributeConfig>
+</ConfigurableModel>
+"""
+
+
+def _base_datamodel():
+    dm = DataModel(use_language_code="en")
+    dm.load(open("tests/data/datamodel.xml").read())
+    return dm
+
+
+def test_datamodel_resolves_tree_leaf_from_sanitized_value():
+    dm = _base_datamodel()
+    assert dm.resolve_option_key(key="causeofdeath", value="natural_disease") == "natural.disease"
+
+
+def test_datamodel_returns_exact_key_unchanged():
+    dm = _base_datamodel()
+    assert dm.resolve_option_key(key="causeofdeath", value="natural.disease") == "natural.disease"
+
+
+def test_datamodel_raises_for_attribute_without_options():
+    dm = _base_datamodel()
+    with pytest.raises(UnresolvableOptionKey):
+        dm.resolve_option_key(key="amountpaid", value="10")  # NUMERIC: options is None
+
+
+def test_datamodel_raises_for_unknown_attribute():
+    dm = _base_datamodel()
+    with pytest.raises(UnresolvableOptionKey, match="no_such_attribute"):
+        dm.resolve_option_key(key="no_such_attribute", value="x")
+
+
+def test_configurable_datamodel_resolves_from_curated_options():
+    cdm = ConfigurableDataModel(use_language_code="en", cm_uuid="cm-1")
+    cdm.load(MINIMAL_CM_XML)
+    assert cdm.resolve_option_key(key="Wildlife.State", value="healthy") == "Healthy"
