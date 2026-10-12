@@ -6,6 +6,8 @@ from typing import List, Any, Optional, Union
 import untangle
 from pydantic import BaseModel, Field, parse_obj_as, validator, ValidationError
 
+from smartconnect.choices import UnresolvableOptionKey, resolve_option_key
+
 SMARTCONNECT_DATFORMAT = '%Y-%m-%dT%H:%M:%S'
 
 
@@ -245,6 +247,23 @@ class SMARTCompositeRequest(BaseModel):
     track_point_requests: Optional[List[SMARTRequest]] = []
 
 
+def _resolve_attribute_option_key(attributes, *, key: str, value: str) -> str:
+    """Map an ER Choice value back to a SMART option key.
+
+    ``attributes`` is every attribute dict whose key is ``key`` (empty when
+    the data model has no such attribute). Options are unioned across them.
+    """
+    if not attributes:
+        raise UnresolvableOptionKey(f"Attribute {key!r} not found in data model")
+    option_keys = [
+        option["key"]
+        for attribute in attributes
+        for option in attribute.get("options") or []
+        if option.get("key")
+    ]
+    return resolve_option_key(option_keys, value)
+
+
 class DataModel:
 
     def __init__(self, use_language_code='en'):
@@ -283,6 +302,11 @@ class DataModel:
         for att in self._attributes:
             if att['key'] == key:
                 return att
+
+    def resolve_option_key(self, *, key: str, value: str) -> str:
+        """Map an ER Choice value back to the SMART option key of attribute ``key``."""
+        attribute = self.get_attribute(key=key)
+        return _resolve_attribute_option_key([attribute] if attribute else [], key=key, value=value)
 
     def generate_category_attributes(self, root):
 
@@ -451,6 +475,14 @@ class ConfigurableDataModel:
         for att in self._attributes:
             if att['key'] == key:
                 return att
+
+    def resolve_option_key(self, *, key: str, value: str) -> str:
+        """Map an ER Choice value back to the SMART option key of attribute ``key``.
+
+        Resolution spans all attribute configs for the key, not just the first.
+        """
+        attributes = [a for a in self._attributes if a["key"] == key]
+        return _resolve_attribute_option_key(attributes, key=key, value=value)
 
     @staticmethod
     def generate_category_attributes(root):
