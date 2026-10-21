@@ -140,6 +140,9 @@ class SmartClient:
 
             return conservation_area
 
+        except SMARTClientException:
+            # Keep login/server errors specific so callers can tell them apart.
+            raise
         except Exception as ex:
             self.logger.exception(
                 f"Failed to get Conservation Areas", extra=dict(ca_uuid=ca_uuid)
@@ -276,6 +279,9 @@ class SmartClient:
             ca_datamodel = self.download_datamodel(
                 ca_uuid=ca_uuid
             )
+        except SMARTClientException:
+            # Keep login/server errors specific so callers can tell them apart.
+            raise
         except Exception as e:
             logger.exception(e)
             raise SMARTClientException(f"Failed downloading SMART Datamodel for CA {ca_uuid}") from e

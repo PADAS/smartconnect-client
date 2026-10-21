@@ -510,6 +510,36 @@ class TestSmartClientCaching:
         mock_get_cas.assert_not_called()
         mock_ensure_login.assert_not_called()
 
+    @pytest.mark.parametrize(
+        "login_error",
+        [SMARTClientUnauthorizedError("401"), SMARTClientServerError("503")],
+        ids=["unauthorized", "server-error"],
+    )
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_data_model_cache_miss_preserves_login_error(self, mock_ensure_login, mock_cache, client, login_error):
+        """A login failure on a cache miss keeps its specific exception type."""
+        mock_cache.get.return_value = None
+        mock_ensure_login.side_effect = login_error
+
+        with pytest.raises(type(login_error)):
+            client.get_data_model(ca_uuid="123e4567-e89b-12d3-a456-426614174000")
+
+    @pytest.mark.parametrize(
+        "login_error",
+        [SMARTClientUnauthorizedError("401"), SMARTClientServerError("503")],
+        ids=["unauthorized", "server-error"],
+    )
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_conservation_area_cache_miss_preserves_login_error(self, mock_ensure_login, mock_cache, client, login_error):
+        """A login failure on a cache miss keeps its specific exception type."""
+        mock_cache.get.return_value = None
+        mock_ensure_login.side_effect = login_error
+
+        with pytest.raises(type(login_error)):
+            client.get_conservation_area(ca_uuid="123e4567-e89b-12d3-a456-426614174000")
+
     @patch('smartconnect.cache.cache')
     @patch.object(SmartClient, 'download_configurable_datamodel')
     @patch.object(SmartClient, 'ensure_login')

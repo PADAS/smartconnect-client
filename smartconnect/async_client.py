@@ -166,6 +166,9 @@ class AsyncSmartClient:
 
             return conservation_area
 
+        except SMARTClientException:
+            # Keep login/server errors specific so callers can tell them apart.
+            raise
         except Exception as ex:
             self.logger.exception(
                 f"Failed to get Conservation Areas from {self.api}", extra=dict(ca_uuid=ca_uuid)
@@ -312,6 +315,9 @@ class AsyncSmartClient:
             ca_datamodel = await self.download_datamodel(
                 ca_uuid=ca_uuid
             )
+        except SMARTClientException:
+            # Keep login/server errors specific so callers can tell them apart.
+            raise
         except Exception as e:
             logger.exception(e)
             raise SMARTClientException(f"Failed downloading SMART Datamodel for CA {ca_uuid}") from e

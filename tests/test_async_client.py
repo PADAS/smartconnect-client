@@ -7,6 +7,7 @@ from pydantic.tools import parse_obj_as
 from typing import List
 
 from smartconnect import DataModel, models
+from smartconnect.exceptions import SMARTClientServerError, SMARTClientUnauthorizedError
 
 # login_mock is for the requests to initiate a session and authenticate.
 login_mock = respx.mock(base_url="https://smarttestserverconnect.smartconservationtools.org/server", assert_all_called=True)
@@ -224,3 +225,35 @@ async def test_get_data_model_cache_miss_logs_in_once(
         await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
     assert home.call_count == 1
     assert login.call_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "login_status, expected_error",
+    [(401, SMARTClientUnauthorizedError), (503, SMARTClientServerError)],
+)
+async def test_get_data_model_cache_miss_preserves_login_error(
+        smart_client, smart_ca_uuid, mocker, mock_cache, login_status, expected_error
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api) as smart_server_mock:
+        smart_server_mock.get('/connect/home').respond(status_code=200)
+        smart_server_mock.post('/j_security_check').respond(status_code=login_status)
+        with pytest.raises(expected_error):
+            await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "login_status, expected_error",
+    [(401, SMARTClientUnauthorizedError), (503, SMARTClientServerError)],
+)
+async def test_get_conservation_area_cache_miss_preserves_login_error(
+        smart_client, smart_ca_uuid, mocker, mock_cache, login_status, expected_error
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api) as smart_server_mock:
+        smart_server_mock.get('/connect/home').respond(status_code=200)
+        smart_server_mock.post('/j_security_check').respond(status_code=login_status)
+        with pytest.raises(expected_error):
+            await smart_client.get_conservation_area(ca_uuid=smart_ca_uuid)
