@@ -162,6 +162,7 @@ class AsyncSmartClient:
                 cache.cache.set(
                     name=cache_key,
                     value=json.dumps(dict(conservation_area), default=str),
+                    ex=smart_settings.SMART_CACHE_TTL_SECONDS,
                 )
 
             return conservation_area
@@ -283,7 +284,11 @@ class AsyncSmartClient:
         ca_config_datamodel = await self.download_configurable_datamodel(
             cm_uuid=cm_uuid
         )
-        cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
+        cache.cache.set(
+            cache_key,
+            json.dumps(ca_config_datamodel.export_as_dict()),
+            ex=smart_settings.SMART_CACHE_TTL_SECONDS,
+        )
         return ca_config_datamodel
 
     async def get_data_model(self, *, ca_uuid: str = None, force: bool = False):
@@ -326,6 +331,7 @@ class AsyncSmartClient:
             cache.cache.set(
                 name=cache_key,
                 value=json.dumps(ca_datamodel.export_as_dict()),
+                ex=smart_settings.SMART_CACHE_TTL_SECONDS,
             )
 
         return ca_datamodel

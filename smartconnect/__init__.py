@@ -136,6 +136,7 @@ class SmartClient:
                 cache.cache.set(
                     name=cache_key,
                     value=json.dumps(dict(conservation_area), default=str),
+                    ex=smart_settings.SMART_CACHE_TTL_SECONDS,
                 )
 
             return conservation_area
@@ -158,8 +159,10 @@ class SmartClient:
 
         if cas.is_success:
             cas = cas.json()
+            return [models.ConservationArea.parse_obj(ca) for ca in cas]
 
-        return [models.ConservationArea.parse_obj(ca) for ca in cas]
+        logger.error(f"Failed to get Conservation Areas from {self.api}. Status code is: {cas.status_code}")
+        raise SMARTClientException(f"Failed to get Conservation Areas")
 
     @with_login_session()
     def list_configurable_datamodels(self, *, ca_uuid: str):
@@ -247,7 +250,11 @@ class SmartClient:
         ca_config_datamodel = self.download_configurable_datamodel(
             cm_uuid=cm_uuid
         )
-        cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
+        cache.cache.set(
+            cache_key,
+            json.dumps(ca_config_datamodel.export_as_dict()),
+            ex=smart_settings.SMART_CACHE_TTL_SECONDS,
+        )
         return ca_config_datamodel
 
     def get_data_model(self, *, ca_uuid: str = None, force: bool = False):
@@ -290,6 +297,7 @@ class SmartClient:
             cache.cache.set(
                 name=cache_key,
                 value=json.dumps(ca_datamodel.export_as_dict()),
+                ex=smart_settings.SMART_CACHE_TTL_SECONDS,
             )
 
         return ca_datamodel

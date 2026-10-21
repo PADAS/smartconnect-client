@@ -6,7 +6,8 @@ import respx
 from pydantic.tools import parse_obj_as
 from typing import List
 
-from smartconnect import DataModel, models
+from smartconnect import DataModel, models, smart_settings
+from smartconnect.models import ConfigurableDataModel
 from smartconnect.exceptions import (
     SMARTClientServerError,
     SMARTClientServerUnreachableError,
@@ -41,8 +42,9 @@ async def test_get_data_model(
         assert ca_datamodel.datamodel == expected_datamodel.datamodel
         assert ca_datamodel._categories == expected_datamodel._categories
         assert ca_datamodel._attributes == expected_datamodel._attributes
-        # check that the datamodel was cached
+        # check that the datamodel was cached, with a TTL
         assert mock_cache.cache.set.called
+        assert mock_cache.cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
 
 
 @pytest.mark.asyncio
@@ -61,8 +63,9 @@ async def test_get_conservation_area(
         )
         conservation_area = await smart_client.get_conservation_area(ca_uuid=smart_ca_uuid)
         assert conservation_area == models.ConservationArea.parse_obj(cas_response[0])
-        # check that the cas was cached
+        # check that the cas was cached, with a TTL
         assert mock_cache.cache.set.called
+        assert mock_cache.cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
 
 
 @pytest.mark.asyncio
@@ -285,3 +288,19 @@ async def test_cache_miss_preserves_transport_error(
         smart_server_mock.get('/connect/home').mock(side_effect=httpx.ConnectError("connection refused"))
         with pytest.raises(httpx.ConnectError):
             await getattr(smart_client, getter)(ca_uuid=smart_ca_uuid)
+
+
+@pytest.mark.asyncio
+async def test_get_configurable_data_model_cache_miss_caches_with_ttl(
+        smart_client, mocker, mock_cache
+):
+    cm_uuid = "b0ffbb1c-1b7a-4b1a-9c1d-1a0a2e8c1a11"
+    with open("tests/data/sample-configurablemodel.xml") as f:
+        cdm = ConfigurableDataModel(cm_uuid=cm_uuid)
+        cdm.load(f.read())
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    mocker.patch.object(smart_client, "download_configurable_datamodel", mocker.AsyncMock(return_value=cdm))
+
+    await smart_client.get_configurable_data_model(cm_uuid=cm_uuid)
+
+    assert mock_cache.cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
