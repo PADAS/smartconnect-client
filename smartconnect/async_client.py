@@ -123,7 +123,6 @@ class AsyncSmartClient:
         if cas.is_server_error:
             logger.warning(f'The SMART Connect server at {self.api} might not support the /api/info request.')
 
-    @with_login_session()
     async def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
@@ -163,10 +162,14 @@ class AsyncSmartClient:
                 cache.cache.set(
                     name=cache_key,
                     value=json.dumps(dict(conservation_area), default=str),
+                    ex=smart_settings.SMART_CACHE_TTL_SECONDS,
                 )
 
             return conservation_area
 
+        except (SMARTClientException, httpx.TransportError):
+            # Keep login, server and transport errors specific so callers can tell them apart.
+            raise
         except Exception as ex:
             self.logger.exception(
                 f"Failed to get Conservation Areas from {self.api}", extra=dict(ca_uuid=ca_uuid)
@@ -255,7 +258,6 @@ class AsyncSmartClient:
 
             return cdm
 
-    @with_login_session()
     async def get_configurable_data_model(self, *, cm_uuid: str = None, force: bool = False):
         # TODO: version consideration
         # TODO: Implement caching
@@ -282,10 +284,13 @@ class AsyncSmartClient:
         ca_config_datamodel = await self.download_configurable_datamodel(
             cm_uuid=cm_uuid
         )
-        cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
+        cache.cache.set(
+            cache_key,
+            json.dumps(ca_config_datamodel.export_as_dict()),
+            ex=smart_settings.SMART_CACHE_TTL_SECONDS,
+        )
         return ca_config_datamodel
 
-    @with_login_session()
     async def get_data_model(self, *, ca_uuid: str = None, force: bool = False):
 
         # CA Data Model is not available for versions below 7. Use a blank data model.
@@ -315,6 +320,9 @@ class AsyncSmartClient:
             ca_datamodel = await self.download_datamodel(
                 ca_uuid=ca_uuid
             )
+        except (SMARTClientException, httpx.TransportError):
+            # Keep login, server and transport errors specific so callers can tell them apart.
+            raise
         except Exception as e:
             logger.exception(e)
             raise SMARTClientException(f"Failed downloading SMART Datamodel for CA {ca_uuid}") from e
@@ -323,6 +331,7 @@ class AsyncSmartClient:
             cache.cache.set(
                 name=cache_key,
                 value=json.dumps(ca_datamodel.export_as_dict()),
+                ex=smart_settings.SMART_CACHE_TTL_SECONDS,
             )
 
         return ca_datamodel

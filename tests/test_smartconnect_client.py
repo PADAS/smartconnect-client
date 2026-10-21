@@ -7,7 +7,7 @@ import httpx
 import pytz
 from pydantic import parse_obj_as
 
-from smartconnect import SmartClient
+from smartconnect import SmartClient, smart_settings
 from smartconnect.exceptions import (
     SMARTClientException, 
     SMARTClientServerError, 
@@ -204,6 +204,18 @@ class TestSmartClientAPICalls:
             headers={'accept': 'application/json'}
         )
     
+    @patch.object(SmartClient, 'ensure_login')
+    @patch('httpx.Client.get')
+    def test_get_conservation_areas_non_2xx_raises(self, mock_get, mock_ensure_login, client):
+        """A non-2xx response raises SMARTClientException instead of iterating the response."""
+        mock_response = Mock()
+        mock_response.is_success = False
+        mock_response.status_code = 500
+        mock_get.return_value = mock_response
+
+        with pytest.raises(SMARTClientException):
+            client.get_conservation_areas()
+
     @patch.object(SmartClient, 'ensure_login')
     @patch('httpx.Client.get')
     def test_get_conservation_areas(self, mock_get, mock_ensure_login, client):
@@ -508,6 +520,64 @@ class TestSmartClientCaching:
         assert result.label == "Cached CA"
         mock_cache.get.assert_called_once_with(f"cache:smart-ca:{ca_uuid}:metadata")
         mock_get_cas.assert_not_called()
+        mock_ensure_login.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "login_error",
+        [
+            SMARTClientUnauthorizedError("401"),
+            SMARTClientServerError("503"),
+            SMARTClientServerUnreachableError("landing page 500"),
+            httpx.ConnectError("connection refused"),
+        ],
+        ids=["unauthorized", "server-error", "unreachable", "transport-error"],
+    )
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_data_model_cache_miss_preserves_login_error(self, mock_ensure_login, mock_cache, client, login_error):
+        """A login failure on a cache miss keeps its specific exception type."""
+        mock_cache.get.return_value = None
+        mock_ensure_login.side_effect = login_error
+
+        with pytest.raises(type(login_error)):
+            client.get_data_model(ca_uuid="123e4567-e89b-12d3-a456-426614174000")
+
+    @pytest.mark.parametrize(
+        "login_error",
+        [
+            SMARTClientUnauthorizedError("401"),
+            SMARTClientServerError("503"),
+            SMARTClientServerUnreachableError("landing page 500"),
+            httpx.ConnectError("connection refused"),
+        ],
+        ids=["unauthorized", "server-error", "unreachable", "transport-error"],
+    )
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_conservation_area_cache_miss_preserves_login_error(self, mock_ensure_login, mock_cache, client, login_error):
+        """A login failure on a cache miss keeps its specific exception type."""
+        mock_cache.get.return_value = None
+        mock_ensure_login.side_effect = login_error
+
+        with pytest.raises(type(login_error)):
+            client.get_conservation_area(ca_uuid="123e4567-e89b-12d3-a456-426614174000")
+
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'download_configurable_datamodel')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_configurable_data_model_with_cache_hit(self, mock_ensure_login, mock_download, mock_cache, client):
+        """Test getting configurable data model with cache hit."""
+        cm_uuid = "123e4567-e89b-12d3-a456-426614174000"
+        mock_cache.get.return_value = json.dumps(
+            {"categories": [], "attributes": [], "name": "Cached CM", "cm_uuid": cm_uuid}
+        )
+
+        result = client.get_configurable_data_model(cm_uuid=cm_uuid)
+
+        assert isinstance(result, ConfigurableDataModel)
+        assert result.cm_uuid == cm_uuid
+        mock_download.assert_not_called()
+        mock_ensure_login.assert_not_called()
     
     @patch('smartconnect.cache.cache')
     @patch.object(SmartClient, 'get_conservation_areas')
@@ -533,6 +603,36 @@ class TestSmartClientCaching:
         mock_cache.get.assert_called_once_with(f"cache:smart-ca:{ca_uuid}:metadata")
         mock_get_cas.assert_called_once()
         mock_cache.set.assert_called_once()
+        assert mock_cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
+
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'download_datamodel')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_data_model_cache_miss_caches_with_ttl(self, mock_ensure_login, mock_download, mock_cache, client):
+        mock_cache.get.return_value = None
+        with open("tests/data/datamodel.xml") as f:
+            dm = DataModel()
+            dm.load(f.read())
+        mock_download.return_value = dm
+
+        client.get_data_model(ca_uuid="123e4567-e89b-12d3-a456-426614174000")
+
+        assert mock_cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
+
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'download_configurable_datamodel')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_configurable_data_model_cache_miss_caches_with_ttl(self, mock_ensure_login, mock_download, mock_cache, client):
+        cm_uuid = "123e4567-e89b-12d3-a456-426614174000"
+        mock_cache.get.return_value = None
+        with open("tests/data/sample-configurablemodel.xml") as f:
+            cdm = ConfigurableDataModel(cm_uuid=cm_uuid)
+            cdm.load(f.read())
+        mock_download.return_value = cdm
+
+        client.get_configurable_data_model(cm_uuid=cm_uuid)
+
+        assert mock_cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
     
     @patch('smartconnect.cache.cache')
     def test_get_data_model_with_cache_hit(self, mock_cache, client):

@@ -1,10 +1,18 @@
+import json
+
 import httpx
 import pytest
 import respx
 from pydantic.tools import parse_obj_as
 from typing import List
 
-from smartconnect import DataModel, models
+from smartconnect import DataModel, models, smart_settings
+from smartconnect.models import ConfigurableDataModel
+from smartconnect.exceptions import (
+    SMARTClientServerError,
+    SMARTClientServerUnreachableError,
+    SMARTClientUnauthorizedError,
+)
 
 # login_mock is for the requests to initiate a session and authenticate.
 login_mock = respx.mock(base_url="https://smarttestserverconnect.smartconservationtools.org/server", assert_all_called=True)
@@ -34,8 +42,9 @@ async def test_get_data_model(
         assert ca_datamodel.datamodel == expected_datamodel.datamodel
         assert ca_datamodel._categories == expected_datamodel._categories
         assert ca_datamodel._attributes == expected_datamodel._attributes
-        # check that the datamodel was cached
+        # check that the datamodel was cached, with a TTL
         assert mock_cache.cache.set.called
+        assert mock_cache.cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
 
 
 @pytest.mark.asyncio
@@ -54,8 +63,9 @@ async def test_get_conservation_area(
         )
         conservation_area = await smart_client.get_conservation_area(ca_uuid=smart_ca_uuid)
         assert conservation_area == models.ConservationArea.parse_obj(cas_response[0])
-        # check that the cas was cached
+        # check that the cas was cached, with a TTL
         assert mock_cache.cache.set.called
+        assert mock_cache.cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS
 
 
 @pytest.mark.asyncio
@@ -161,3 +171,136 @@ async def test_post_smart_request_track_point(
             ca_uuid=smart_ca_uuid
         )
         assert response == new_track_point_response
+
+
+@pytest.mark.asyncio
+async def test_get_data_model_cache_hit_does_not_login(
+        smart_client, smart_ca_uuid, datamodel_response, mocker, mock_cache
+):
+    cached_datamodel = DataModel()
+    cached_datamodel.load(datamodel_response)
+    mock_cache.cache.get.return_value = json.dumps(cached_datamodel.export_as_dict())
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    # Any HTTP request (including the login flow) fails the test.
+    async with respx.mock(assert_all_mocked=True) as smart_server_mock:
+        ca_datamodel = await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+        assert not smart_server_mock.calls
+    assert ca_datamodel._categories == cached_datamodel._categories
+
+
+@pytest.mark.asyncio
+async def test_get_configurable_data_model_cache_hit_does_not_login(
+        smart_client, mocker, mock_cache
+):
+    cm_uuid = "b0ffbb1c-1b7a-4b1a-9c1d-1a0a2e8c1a11"
+    mock_cache.cache.get.return_value = json.dumps(
+        {"categories": [], "attributes": [], "name": "Cached CM", "cm_uuid": cm_uuid}
+    )
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(assert_all_mocked=True) as smart_server_mock:
+        cdm = await smart_client.get_configurable_data_model(cm_uuid=cm_uuid)
+        assert not smart_server_mock.calls
+    assert cdm.cm_uuid == cm_uuid
+
+
+@pytest.mark.asyncio
+async def test_get_conservation_area_cache_hit_does_not_login(
+        smart_client, smart_ca_uuid, cas_response, mocker, mock_cache
+):
+    mock_cache.cache.get.return_value = json.dumps(cas_response[0])
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(assert_all_mocked=True) as smart_server_mock:
+        conservation_area = await smart_client.get_conservation_area(ca_uuid=smart_ca_uuid)
+        assert not smart_server_mock.calls
+    assert conservation_area == models.ConservationArea.parse_obj(cas_response[0])
+
+
+@pytest.mark.asyncio
+async def test_get_data_model_cache_miss_logs_in_once(
+        smart_client, smart_ca_uuid, datamodel_response, mocker, mock_cache
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api, assert_all_called=True) as smart_server_mock:
+        home = smart_server_mock.get('/connect/home').respond(status_code=200)
+        login = smart_server_mock.post('/j_security_check').respond(
+            status_code=200, headers={"set-cookie": "JSESSIONID=abc; Path=/"}
+        )
+        smart_server_mock.get(f'/api/metadata/datamodel/{smart_ca_uuid}').respond(
+            status_code=200, text=datamodel_response
+        )
+        await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+        await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+    assert home.call_count == 1
+    assert login.call_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "login_status, expected_error",
+    [(401, SMARTClientUnauthorizedError), (503, SMARTClientServerError)],
+)
+async def test_get_data_model_cache_miss_preserves_login_error(
+        smart_client, smart_ca_uuid, mocker, mock_cache, login_status, expected_error
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api) as smart_server_mock:
+        smart_server_mock.get('/connect/home').respond(status_code=200)
+        smart_server_mock.post('/j_security_check').respond(status_code=login_status)
+        with pytest.raises(expected_error):
+            await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "login_status, expected_error",
+    [(401, SMARTClientUnauthorizedError), (503, SMARTClientServerError)],
+)
+async def test_get_conservation_area_cache_miss_preserves_login_error(
+        smart_client, smart_ca_uuid, mocker, mock_cache, login_status, expected_error
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api) as smart_server_mock:
+        smart_server_mock.get('/connect/home').respond(status_code=200)
+        smart_server_mock.post('/j_security_check').respond(status_code=login_status)
+        with pytest.raises(expected_error):
+            await smart_client.get_conservation_area(ca_uuid=smart_ca_uuid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("getter", ["get_data_model", "get_conservation_area"])
+async def test_cache_miss_preserves_unreachable_landing_page_error(
+        smart_client, smart_ca_uuid, mocker, mock_cache, getter
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api) as smart_server_mock:
+        smart_server_mock.get('/connect/home').respond(status_code=500)
+        with pytest.raises(SMARTClientServerUnreachableError):
+            await getattr(smart_client, getter)(ca_uuid=smart_ca_uuid)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("getter", ["get_data_model", "get_conservation_area"])
+async def test_cache_miss_preserves_transport_error(
+        smart_client, smart_ca_uuid, mocker, mock_cache, getter
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api) as smart_server_mock:
+        smart_server_mock.get('/connect/home').mock(side_effect=httpx.ConnectError("connection refused"))
+        with pytest.raises(httpx.ConnectError):
+            await getattr(smart_client, getter)(ca_uuid=smart_ca_uuid)
+
+
+@pytest.mark.asyncio
+async def test_get_configurable_data_model_cache_miss_caches_with_ttl(
+        smart_client, mocker, mock_cache
+):
+    cm_uuid = "b0ffbb1c-1b7a-4b1a-9c1d-1a0a2e8c1a11"
+    with open("tests/data/sample-configurablemodel.xml") as f:
+        cdm = ConfigurableDataModel(cm_uuid=cm_uuid)
+        cdm.load(f.read())
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    mocker.patch.object(smart_client, "download_configurable_datamodel", mocker.AsyncMock(return_value=cdm))
+
+    await smart_client.get_configurable_data_model(cm_uuid=cm_uuid)
+
+    assert mock_cache.cache.set.call_args.kwargs["ex"] == smart_settings.SMART_CACHE_TTL_SECONDS

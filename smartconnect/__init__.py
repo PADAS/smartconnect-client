@@ -20,7 +20,7 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
     ConfigurableDataModel, SmartConnectApiInfo
 
 # Manually bump this.
-__version__ = '1.15.0'
+__version__ = '1.16.0'
 
 DEFAULT_TIMEOUT = (smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT, smart_settings.SMART_DEFAULT_TIMEOUT)
 
@@ -97,7 +97,6 @@ class SmartClient:
         if cas.is_success:
             return SmartConnectApiInfo.parse_obj(cas.json())
 
-    @with_login_session()
     def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
@@ -137,10 +136,14 @@ class SmartClient:
                 cache.cache.set(
                     name=cache_key,
                     value=json.dumps(dict(conservation_area), default=str),
+                    ex=smart_settings.SMART_CACHE_TTL_SECONDS,
                 )
 
             return conservation_area
 
+        except (SMARTClientException, httpx.TransportError):
+            # Keep login, server and transport errors specific so callers can tell them apart.
+            raise
         except Exception as ex:
             self.logger.exception(
                 f"Failed to get Conservation Areas", extra=dict(ca_uuid=ca_uuid)
@@ -156,8 +159,10 @@ class SmartClient:
 
         if cas.is_success:
             cas = cas.json()
+            return [models.ConservationArea.parse_obj(ca) for ca in cas]
 
-        return [models.ConservationArea.parse_obj(ca) for ca in cas]
+        logger.error(f"Failed to get Conservation Areas from {self.api}. Status code is: {cas.status_code}")
+        raise SMARTClientException(f"Failed to get Conservation Areas")
 
     @with_login_session()
     def list_configurable_datamodels(self, *, ca_uuid: str):
@@ -218,7 +223,6 @@ class SmartClient:
         
         return cdm
 
-    @with_login_session()
     def get_configurable_data_model(self, *, cm_uuid: str = None, force: bool = False):
         # TODO: version consideration
         # TODO: Implement caching
@@ -246,7 +250,11 @@ class SmartClient:
         ca_config_datamodel = self.download_configurable_datamodel(
             cm_uuid=cm_uuid
         )
-        cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
+        cache.cache.set(
+            cache_key,
+            json.dumps(ca_config_datamodel.export_as_dict()),
+            ex=smart_settings.SMART_CACHE_TTL_SECONDS,
+        )
         return ca_config_datamodel
 
     def get_data_model(self, *, ca_uuid: str = None, force: bool = False):
@@ -278,6 +286,9 @@ class SmartClient:
             ca_datamodel = self.download_datamodel(
                 ca_uuid=ca_uuid
             )
+        except (SMARTClientException, httpx.TransportError):
+            # Keep login, server and transport errors specific so callers can tell them apart.
+            raise
         except Exception as e:
             logger.exception(e)
             raise SMARTClientException(f"Failed downloading SMART Datamodel for CA {ca_uuid}") from e
@@ -286,6 +297,7 @@ class SmartClient:
             cache.cache.set(
                 name=cache_key,
                 value=json.dumps(ca_datamodel.export_as_dict()),
+                ex=smart_settings.SMART_CACHE_TTL_SECONDS,
             )
 
         return ca_datamodel
