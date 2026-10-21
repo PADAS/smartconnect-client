@@ -123,7 +123,6 @@ class AsyncSmartClient:
         if cas.is_server_error:
             logger.warning(f'The SMART Connect server at {self.api} might not support the /api/info request.')
 
-    @with_login_session()
     async def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
@@ -255,7 +254,6 @@ class AsyncSmartClient:
 
             return cdm
 
-    @with_login_session()
     async def get_configurable_data_model(self, *, cm_uuid: str = None, force: bool = False):
         # TODO: version consideration
         # TODO: Implement caching
@@ -285,7 +283,6 @@ class AsyncSmartClient:
         cache.cache.set(cache_key, json.dumps(ca_config_datamodel.export_as_dict()))
         return ca_config_datamodel
 
-    @with_login_session()
     async def get_data_model(self, *, ca_uuid: str = None, force: bool = False):
 
         # CA Data Model is not available for versions below 7. Use a blank data model.

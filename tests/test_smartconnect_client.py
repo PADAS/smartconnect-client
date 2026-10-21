@@ -508,6 +508,24 @@ class TestSmartClientCaching:
         assert result.label == "Cached CA"
         mock_cache.get.assert_called_once_with(f"cache:smart-ca:{ca_uuid}:metadata")
         mock_get_cas.assert_not_called()
+        mock_ensure_login.assert_not_called()
+
+    @patch('smartconnect.cache.cache')
+    @patch.object(SmartClient, 'download_configurable_datamodel')
+    @patch.object(SmartClient, 'ensure_login')
+    def test_get_configurable_data_model_with_cache_hit(self, mock_ensure_login, mock_download, mock_cache, client):
+        """Test getting configurable data model with cache hit."""
+        cm_uuid = "123e4567-e89b-12d3-a456-426614174000"
+        mock_cache.get.return_value = json.dumps(
+            {"categories": [], "attributes": [], "name": "Cached CM", "cm_uuid": cm_uuid}
+        )
+
+        result = client.get_configurable_data_model(cm_uuid=cm_uuid)
+
+        assert isinstance(result, ConfigurableDataModel)
+        assert result.cm_uuid == cm_uuid
+        mock_download.assert_not_called()
+        mock_ensure_login.assert_not_called()
     
     @patch('smartconnect.cache.cache')
     @patch.object(SmartClient, 'get_conservation_areas')

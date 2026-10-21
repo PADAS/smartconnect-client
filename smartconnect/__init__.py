@@ -20,7 +20,7 @@ from smartconnect.models import SMARTRequest, SMARTResponse, Patrol, PatrolDataM
     ConfigurableDataModel, SmartConnectApiInfo
 
 # Manually bump this.
-__version__ = '1.15.0'
+__version__ = '1.16.0'
 
 DEFAULT_TIMEOUT = (smart_settings.SMART_DEFAULT_CONNECT_TIMEOUT, smart_settings.SMART_DEFAULT_TIMEOUT)
 
@@ -97,7 +97,6 @@ class SmartClient:
         if cas.is_success:
             return SmartConnectApiInfo.parse_obj(cas.json())
 
-    @with_login_session()
     def get_conservation_area(self, *, ca_uuid: str = None, force: bool = False):
 
         cache_key = f"cache:smart-ca:{ca_uuid}:metadata"
@@ -218,7 +217,6 @@ class SmartClient:
         
         return cdm
 
-    @with_login_session()
     def get_configurable_data_model(self, *, cm_uuid: str = None, force: bool = False):
         # TODO: version consideration
         # TODO: Implement caching

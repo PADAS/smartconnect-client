@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 import respx
@@ -161,3 +163,64 @@ async def test_post_smart_request_track_point(
             ca_uuid=smart_ca_uuid
         )
         assert response == new_track_point_response
+
+
+@pytest.mark.asyncio
+async def test_get_data_model_cache_hit_does_not_login(
+        smart_client, smart_ca_uuid, datamodel_response, mocker, mock_cache
+):
+    cached_datamodel = DataModel()
+    cached_datamodel.load(datamodel_response)
+    mock_cache.cache.get.return_value = json.dumps(cached_datamodel.export_as_dict())
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    # Any HTTP request (including the login flow) fails the test.
+    async with respx.mock(assert_all_mocked=True) as smart_server_mock:
+        ca_datamodel = await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+        assert not smart_server_mock.calls
+    assert ca_datamodel._categories == cached_datamodel._categories
+
+
+@pytest.mark.asyncio
+async def test_get_configurable_data_model_cache_hit_does_not_login(
+        smart_client, mocker, mock_cache
+):
+    cm_uuid = "b0ffbb1c-1b7a-4b1a-9c1d-1a0a2e8c1a11"
+    mock_cache.cache.get.return_value = json.dumps(
+        {"categories": [], "attributes": [], "name": "Cached CM", "cm_uuid": cm_uuid}
+    )
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(assert_all_mocked=True) as smart_server_mock:
+        cdm = await smart_client.get_configurable_data_model(cm_uuid=cm_uuid)
+        assert not smart_server_mock.calls
+    assert cdm.cm_uuid == cm_uuid
+
+
+@pytest.mark.asyncio
+async def test_get_conservation_area_cache_hit_does_not_login(
+        smart_client, smart_ca_uuid, cas_response, mocker, mock_cache
+):
+    mock_cache.cache.get.return_value = json.dumps(cas_response[0])
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(assert_all_mocked=True) as smart_server_mock:
+        conservation_area = await smart_client.get_conservation_area(ca_uuid=smart_ca_uuid)
+        assert not smart_server_mock.calls
+    assert conservation_area == models.ConservationArea.parse_obj(cas_response[0])
+
+
+@pytest.mark.asyncio
+async def test_get_data_model_cache_miss_logs_in_once(
+        smart_client, smart_ca_uuid, datamodel_response, mocker, mock_cache
+):
+    mocker.patch("smartconnect.async_client.cache", mock_cache)
+    async with respx.mock(base_url=smart_client.api, assert_all_called=True) as smart_server_mock:
+        home = smart_server_mock.get('/connect/home').respond(status_code=200)
+        login = smart_server_mock.post('/j_security_check').respond(
+            status_code=200, headers={"set-cookie": "JSESSIONID=abc; Path=/"}
+        )
+        smart_server_mock.get(f'/api/metadata/datamodel/{smart_ca_uuid}').respond(
+            status_code=200, text=datamodel_response
+        )
+        await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+        await smart_client.get_data_model(ca_uuid=smart_ca_uuid)
+    assert home.call_count == 1
+    assert login.call_count == 1
