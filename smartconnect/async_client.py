@@ -166,8 +166,8 @@ class AsyncSmartClient:
 
             return conservation_area
 
-        except SMARTClientException:
-            # Keep login/server errors specific so callers can tell them apart.
+        except (SMARTClientException, httpx.TransportError):
+            # Keep login, server and transport errors specific so callers can tell them apart.
             raise
         except Exception as ex:
             self.logger.exception(
@@ -315,8 +315,8 @@ class AsyncSmartClient:
             ca_datamodel = await self.download_datamodel(
                 ca_uuid=ca_uuid
             )
-        except SMARTClientException:
-            # Keep login/server errors specific so callers can tell them apart.
+        except (SMARTClientException, httpx.TransportError):
+            # Keep login, server and transport errors specific so callers can tell them apart.
             raise
         except Exception as e:
             logger.exception(e)

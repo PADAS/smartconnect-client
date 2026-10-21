@@ -512,8 +512,13 @@ class TestSmartClientCaching:
 
     @pytest.mark.parametrize(
         "login_error",
-        [SMARTClientUnauthorizedError("401"), SMARTClientServerError("503")],
-        ids=["unauthorized", "server-error"],
+        [
+            SMARTClientUnauthorizedError("401"),
+            SMARTClientServerError("503"),
+            SMARTClientServerUnreachableError("landing page 500"),
+            httpx.ConnectError("connection refused"),
+        ],
+        ids=["unauthorized", "server-error", "unreachable", "transport-error"],
     )
     @patch('smartconnect.cache.cache')
     @patch.object(SmartClient, 'ensure_login')
@@ -527,8 +532,13 @@ class TestSmartClientCaching:
 
     @pytest.mark.parametrize(
         "login_error",
-        [SMARTClientUnauthorizedError("401"), SMARTClientServerError("503")],
-        ids=["unauthorized", "server-error"],
+        [
+            SMARTClientUnauthorizedError("401"),
+            SMARTClientServerError("503"),
+            SMARTClientServerUnreachableError("landing page 500"),
+            httpx.ConnectError("connection refused"),
+        ],
+        ids=["unauthorized", "server-error", "unreachable", "transport-error"],
     )
     @patch('smartconnect.cache.cache')
     @patch.object(SmartClient, 'ensure_login')
